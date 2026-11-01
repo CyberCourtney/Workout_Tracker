@@ -5,6 +5,10 @@
 # Usage:
 #   AWS_PROFILE=<your-profile> ./scripts/deploy.sh
 # Optional: AWS_REGION (default eu-west-2), STACK_NAME (default workout-tracker)
+# Custom domain (see README): DOMAIN_NAME, CERTIFICATE_ARN (from
+# scripts/deploy-certificate.sh), HOSTED_ZONE_ID (only for Route 53 DNS).
+# Unset ones keep the stack's current value, so a plain redeploy never
+# drops the domain.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -27,15 +31,22 @@ step "2/7 Validate template"
 run aws cloudformation validate-template --template-body file://infra/template.yaml --query Description --output text
 
 step "3/7 Deploy CloudFormation stack (creates/updates AWS resources)"
+PARAMS=()
+[[ -n "${DOMAIN_NAME+x}" ]] && PARAMS+=("DomainName=$DOMAIN_NAME")
+[[ -n "${CERTIFICATE_ARN+x}" ]] && PARAMS+=("CertificateArn=$CERTIFICATE_ARN")
+[[ -n "${HOSTED_ZONE_ID+x}" ]] && PARAMS+=("HostedZoneId=$HOSTED_ZONE_ID")
 run aws cloudformation deploy \
   --stack-name "$STACK_NAME" \
   --template-file infra/template.yaml \
   --capabilities CAPABILITY_IAM \
-  --no-fail-on-empty-changeset
+  --no-fail-on-empty-changeset \
+  ${PARAMS[@]+--parameter-overrides "${PARAMS[@]}"}
 
 step "4/7 Read stack outputs"
 echo "+ aws cloudformation describe-stacks --stack-name $STACK_NAME (Outputs)"
 SITE_URL="$(output SiteUrl)"
+CLOUDFRONT_URL="$(output CloudFrontUrl)"
+DNS_TARGET="$(output DnsTarget)"
 API_URL="$(output ApiUrl)"
 USER_POOL_ID="$(output UserPoolId)"
 CLIENT_ID="$(output UserPoolClientId)"
@@ -62,7 +73,8 @@ window.APP_CONFIG = {
   region: "$AWS_REGION",
   userPoolId: "$USER_POOL_ID",
   clientId: "$CLIENT_ID",
-  hostedUiDomain: "$HOSTED_UI_DOMAIN"
+  hostedUiDomain: "$HOSTED_UI_DOMAIN",
+  siteDomain: "${SITE_URL#https://}"
 };
 EOF
 
@@ -71,5 +83,8 @@ run aws s3 sync frontend/ "s3://$BUCKET/" --delete --exclude ".*" --cache-contro
 run aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" \
   --query Invalidation.Id --output text
 
-printf '\nDone.\n  Site:          %s\n  User pool ID:  %s\n' "$SITE_URL" "$USER_POOL_ID"
+printf '\nDone.\n  Site:            %s\n  CloudFront URL:  %s\n  User pool ID:    %s\n' "$SITE_URL" "$CLOUDFRONT_URL" "$USER_POOL_ID"
+if [[ "$SITE_URL" != "$CLOUDFRONT_URL" ]]; then
+  echo "  DNS: the custom domain needs a CNAME (DNS only) pointing at $DNS_TARGET unless Route 53 manages it."
+fi
 echo "Note: frontend/config.js now holds this deployment's IDs. Don't commit it (git checkout frontend/config.js restores the blank one)."

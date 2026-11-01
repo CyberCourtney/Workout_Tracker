@@ -4,6 +4,33 @@ Description: >-
   frontend, Cognito Hosted UI login, HTTP API with JWT authorizer, one Lambda,
   one on-demand DynamoDB table. No VPC and nothing billed by the hour.
 
+Parameters:
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Optional custom domain (e.g. workout.example.com). Empty = cloudfront.net URL only.
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate in us-east-1 covering DomainName (from infra/certificate.yaml). Required with DomainName.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Optional Route 53 hosted zone for DomainName. Empty = add the DNS record by hand (e.g. Cloudflare CNAME).
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  HasZone: !And
+    - !Condition HasDomain
+    - !Not [!Equals [!Ref HostedZoneId, ""]]
+
+Rules:
+  CertificateWithDomain:
+    RuleCondition: !Not [!Equals [!Ref DomainName, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref CertificateArn, ""]]
+        AssertDescription: CertificateArn is required when DomainName is set.
+
 Resources:
   # ---------------------------------------------------------------- storage
   WorkoutsTable:
@@ -67,10 +94,15 @@ Resources:
       AllowedOAuthFlows: [code]
       AllowedOAuthScopes: [openid, email]
       SupportedIdentityProviders: [COGNITO]
-      CallbackURLs:
-        - !Sub "https://${Distribution.DomainName}/"
-      LogoutURLs:
-        - !Sub "https://${Distribution.DomainName}/"
+      # The cloudfront.net URL keeps working alongside the custom domain.
+      CallbackURLs: !If
+        - HasDomain
+        - [!Sub "https://${Distribution.DomainName}/", !Sub "https://${DomainName}/"]
+        - [!Sub "https://${Distribution.DomainName}/"]
+      LogoutURLs: !If
+        - HasDomain
+        - [!Sub "https://${Distribution.DomainName}/", !Sub "https://${DomainName}/"]
+        - [!Sub "https://${Distribution.DomainName}/"]
       ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
       PreventUserExistenceErrors: ENABLED
       EnableTokenRevocation: true
@@ -144,8 +176,10 @@ Resources:
       Name: !Sub "${AWS::StackName}-api"
       ProtocolType: HTTP
       CorsConfiguration:
-        AllowOrigins:
-          - !Sub "https://${Distribution.DomainName}"
+        AllowOrigins: !If
+          - HasDomain
+          - [!Sub "https://${Distribution.DomainName}", !Sub "https://${DomainName}"]
+          - [!Sub "https://${Distribution.DomainName}"]
         AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
         AllowHeaders: [authorization, content-type]
         MaxAge: 3600
@@ -285,6 +319,13 @@ Resources:
         DefaultRootObject: index.html
         HttpVersion: http2and3
         PriceClass: PriceClass_100
+        Aliases: !If [HasDomain, [!Ref DomainName], !Ref AWS::NoValue]
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
         Origins:
           - Id: site
             DomainName: !GetAtt SiteBucket.RegionalDomainName
@@ -300,9 +341,41 @@ Resources:
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # AWS managed: CachingOptimized
           ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # AWS managed: SecurityHeadersPolicy
 
+  # Only when the domain's DNS is in Route 53. For DNS elsewhere, point a
+  # CNAME for DomainName at the DnsTarget output instead.
+  DomainRecordA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # fixed AWS value meaning "a CloudFront distribution"
+
+  DomainRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
 Outputs:
   SiteUrl:
+    Value: !If
+      - HasDomain
+      - !Sub "https://${DomainName}"
+      - !Sub "https://${Distribution.DomainName}"
+  CloudFrontUrl:
     Value: !Sub "https://${Distribution.DomainName}"
+  DnsTarget:
+    Description: Point a CNAME (DNS only, not proxied) for the custom domain here.
+    Value: !GetAtt Distribution.DomainName
   ApiUrl:
     Value: !GetAtt HttpApi.ApiEndpoint
   UserPoolId:
