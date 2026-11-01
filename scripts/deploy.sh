@@ -80,6 +80,9 @@ EOF
 
 step "7/7 Upload frontend and refresh the CDN"
 run aws s3 sync frontend/ "s3://$BUCKET/" --delete --exclude ".*" --cache-control "no-cache"
+# The CLI doesn't know the .webmanifest type; set it so iOS/Android read it.
+run aws s3 cp frontend/manifest.webmanifest "s3://$BUCKET/manifest.webmanifest" \
+  --content-type "application/manifest+json" --cache-control "no-cache"
 run aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" \
   --query Invalidation.Id --output text
 
