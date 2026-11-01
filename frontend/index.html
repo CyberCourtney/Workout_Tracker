@@ -9,6 +9,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Workouts">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
   <title>Workouts</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -137,6 +141,8 @@
     <div id="detail-body"></div>
     <div class="sheet-actions">
       <button class="btn primary" id="detail-start" hidden>Start Workout</button>
+      <button class="btn primary" id="detail-share" hidden>Share</button>
+      <button class="btn secondary" id="detail-repeat" hidden>Repeat Today</button>
       <button class="btn secondary" id="detail-edit">Edit</button>
       <button class="btn text danger" id="detail-delete">Delete</button>
     </div>
@@ -161,13 +167,28 @@
     <button class="btn text danger" id="sign-out">Sign Out</button>
   </dialog>
 
-  <div id="toast" class="toast" role="status" hidden></div>
+  <!-- Share preview sheet -->
+  <dialog id="share" class="sheet">
+    <div class="sheet-head">
+      <span></span>
+      <strong>Share Workout</strong>
+      <button class="btn-link" data-close>Done</button>
+    </div>
+    <img id="share-preview" class="share-preview" alt="Preview of the workout image">
+    <div class="sheet-actions two-up">
+      <button class="btn primary" id="share-go">Share</button>
+      <button class="btn secondary" id="share-save">Save</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" popover="manual" hidden></div>
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="gear" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm7.43-2.53a7.8 7.8 0 0 0 0-1.94l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.68-.98l-.38-2.65A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.6.25-1.17.58-1.68.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65a7.8 7.8 0 0 0 0 1.94l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.61.22l2.49-1c.51.4 1.08.73 1.68.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.38-2.65c.6-.25 1.17-.58 1.68-.98l2.49 1c.22.08.48 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65Z"/></symbol>
   </svg>
 
   <script src="config.js"></script>
+  <script src="share.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -30,6 +30,46 @@ const toKg = (v, unit) => (unit === 'lb' ? v * KG_PER_LB : v);
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
 const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
+// ------------------------------------------------------------ personal records
+// Computed on the client from completed workouts; nothing extra is stored.
+const epley = s => (s.reps > 0 ? (s.reps === 1 ? s.weight : s.weight * (1 + s.reps / 30)) : 0);
+const isBefore = (a, b) => a.date < b.date || (a.date === b.date && (a.updatedAt || '') < (b.updatedAt || '￿'));
+
+// Returns Map(exerciseIndex -> { set, kinds }) for sets in `workout` that beat
+// every earlier completed workout's best estimated 1RM or top weight. An
+// exercise done for the first time has nothing to beat, so it is not a PR.
+function findPRs(workout, history) {
+  const best = new Map();
+  for (const w of history) {
+    if (w.status !== 'completed' || w.id === workout.id || !isBefore(w, workout)) continue;
+    for (const e of w.exercises) {
+      const k = norm(e.name);
+      const b = best.get(k) || { e1rm: 0, top: 0 };
+      for (const s of e.sets) {
+        if (s.reps <= 0) continue;
+        b.e1rm = Math.max(b.e1rm, epley(s));
+        b.top = Math.max(b.top, s.weight);
+      }
+      best.set(k, b);
+    }
+  }
+  const prs = new Map();
+  workout.exercises.forEach((e, i) => {
+    const b = best.get(norm(e.name));
+    if (!b) return;
+    let pick = null;
+    e.sets.forEach((s, j) => {
+      if (s.reps <= 0) return;
+      const kinds = [];
+      if (epley(s) > b.e1rm + 1e-9) kinds.push('e1rm');
+      if (s.weight > b.top + 1e-9) kinds.push('top');
+      if (kinds.length && (!pick || epley(s) > epley(e.sets[pick.set]))) pick = { set: j, kinds };
+    });
+    if (pick) prs.set(i, pick);
+  });
+  return prs;
+}
+
 // ------------------------------------------------------------ auth
 // Tokens live in sessionStorage (cleared with the tab); localStorage is used
 // only for the workout draft and the unit setting.
@@ -201,12 +241,17 @@ $('#start-btn').addEventListener('click', startWorkout);
 $('#wk-start-empty').addEventListener('click', startWorkout);
 
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 2200) {
   const t = $('#toast');
   t.textContent = msg;
   t.hidden = false;
+  // As a popover the toast sits above open sheets (top layer) where supported.
+  if (t.showPopover) { try { t.hidePopover(); } catch {} t.showPopover(); }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+  toastTimer = setTimeout(() => {
+    t.hidden = true;
+    if (t.hidePopover) { try { t.hidePopover(); } catch {} }
+  }, ms);
 }
 
 // ------------------------------------------------------------ calendar
@@ -268,6 +313,7 @@ function renderDayList() {
   ul.innerHTML = '';
   items.forEach((w, i) => {
     const li = document.createElement('li');
+    li.className = 'workout-item';
     const b = document.createElement('button');
     b.className = 'card workout-card';
     const planned = w.status === 'planned';
@@ -277,6 +323,12 @@ function renderDayList() {
       <p class="ex">${esc(summary(w))}</p><p class="ex">${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'} · ${sets} set${sets === 1 ? '' : 's'}</p>`;
     b.addEventListener('click', () => openDetail(w));
     li.append(b);
+    if (!planned) {
+      const share = Object.assign(document.createElement('button'), { className: 'card-share', textContent: 'Share' });
+      share.setAttribute('aria-label', `Share workout from ${shortDate(w.date)}`);
+      share.addEventListener('click', () => openShare(w));
+      li.append(share);
+    }
     ul.append(li);
   });
   $('#day-empty').hidden = items.length > 0 || !monthCache.has(selectedDay.slice(0, 7));
@@ -300,17 +352,77 @@ $('#day-add').addEventListener('click', () => {
 const detail = $('#detail');
 let detailWorkout = null;
 
-function openDetail(w) {
+function openDetail(w, title) {
   detailWorkout = w;
   const unit = getUnit();
-  $('#detail-title').textContent = `${w.status === 'planned' ? 'Planned · ' : ''}${shortDate(w.date)}`;
+  $('#detail-title').textContent = title || `${w.status === 'planned' ? 'Planned · ' : ''}${shortDate(w.date)}`;
   $('#detail-body').innerHTML = w.exercises.map(e => `
     <div class="card detail-ex"><h3>${esc(e.name)}</h3>
       <table>${e.sets.map((s, i) => `<tr><td>Set ${i + 1}</td><td>${fmt(s.reps)} reps</td><td>${fmt(kgTo(s.weight, unit))} ${unit}</td></tr>`).join('') || '<tr><td colspan="3">No sets</td></tr>'}</table>
     </div>`).join('');
   $('#detail-start').hidden = w.status !== 'planned';
-  detail.showModal();
+  $('#detail-share').hidden = w.status !== 'completed';
+  $('#detail-repeat').hidden = w.status !== 'completed';
+  if (!detail.open) detail.showModal();
 }
+
+$('#detail-share').addEventListener('click', () => openShare(detailWorkout));
+$('#detail-repeat').addEventListener('click', () => {
+  if (!confirmReplaceDraft()) return;
+  // Copies exercises and set count; last time's numbers show as placeholders
+  // so nothing counts as done until it's typed in.
+  const unit = getUnit();
+  draft = {
+    id: null, mode: 'new', date: today(), status: 'completed', unit,
+    exercises: detailWorkout.exercises.map(e => ({
+      name: e.name,
+      sets: (e.sets.length ? e.sets : [{}]).map(s => ({
+        reps: '', weight: '',
+        hint: s.reps != null ? { reps: String(s.reps), weight: String(Math.round(kgTo(s.weight, unit) * 10) / 10) } : null,
+      })),
+    })),
+  };
+  persistDraft();
+  detail.close();
+  show('workout');
+});
+
+// ------------------------------------------------------------ share image
+const shareSheet = $('#share');
+let shareFile = null;
+
+async function openShare(w) {
+  let history = [];
+  try { history = await loadAll(); } catch { /* share without PR badges */ }
+  const prs = new Map([...findPRs(w, history)].map(([i, p]) => [i, p.set]));
+  const { canvas } = WorkoutShare.render(w, { unit: getUnit(), prs, domain: CFG.siteDomain || location.host });
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  shareFile = new File([blob], `workout-${w.date}.png`, { type: 'image/png' });
+  const img = $('#share-preview');
+  if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(blob);
+  if (detail.open) detail.close();
+  shareSheet.showModal();
+}
+
+function saveShareFile() {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(shareFile), download: shareFile.name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+$('#share-go').addEventListener('click', async () => {
+  if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+    try { await navigator.share({ files: [shareFile] }); }
+    catch (e) { if (e.name !== 'AbortError') toast('Could not open sharing. Try Save instead.'); }
+  } else {
+    saveShareFile();
+    toast('Sharing isn’t available here, so the image was saved instead');
+  }
+});
+$('#share-save').addEventListener('click', saveShareFile);
 $$('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 $$('dialog.sheet').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
 
@@ -351,7 +463,26 @@ async function refreshNameSuggestions() {
     }
     $('#exercise-names').innerHTML = [...counts.values()].sort((a, b) => b.n - a.n)
       .map(c => `<option value="${esc(c.name)}"></option>`).join('');
+    // history just arrived: fill in "last time" hints for names already typed
+    if (draft) $$('.exercise').forEach((li, i) => {
+      if (draft.exercises[i]) $('.last-time', li).textContent = lastTimeText(draft.exercises[i].name);
+    });
   } catch { /* suggestions are optional */ }
+}
+
+// "Last time: 12 Oct · 5 × 60 kg, 5 × 62.5 kg" from the most recent earlier
+// completed workout containing this exercise.
+function lastTimeText(name) {
+  const k = norm(name || '');
+  if (!k || !allWorkouts || !draft) return '';
+  const unit = getUnit();
+  const prev = allWorkouts
+    .filter(w => w.status === 'completed' && w.id !== draft.id && w.date <= draft.date && w.exercises.some(e => norm(e.name) === k))
+    .sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')))[0];
+  if (!prev) return '';
+  const sets = prev.exercises.filter(e => norm(e.name) === k).flatMap(e => e.sets);
+  const when = parseDate(prev.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return `Last time (${when}): ${sets.map(s => `${fmt(s.reps)} × ${fmt(kgTo(s.weight, unit))} ${unit}`).join(', ') || 'no sets'}`;
 }
 
 function renderWorkout() {
@@ -385,12 +516,21 @@ function drawExercises() {
         <button class="icon-btn small" data-act="remove" aria-label="Delete exercise">
           <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       </div>
+      <p class="last-time" aria-live="polite"></p>
       <div class="set-grid set-labels"><span>Set</span><span>Reps</span><span>${draft.unit}</span><span></span></div>
       <div class="sets"></div>
       <button class="add-set">+ Add Set</button>`;
     const name = $('.ex-name', li);
     name.value = ex.name;
-    name.addEventListener('input', () => { ex.name = name.value; persistDraft(); });
+    const hint = $('.last-time', li);
+    hint.textContent = lastTimeText(ex.name);
+    let hintTimer;
+    name.addEventListener('input', () => {
+      ex.name = name.value;
+      persistDraft();
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { hint.textContent = lastTimeText(ex.name); }, 250);
+    });
 
     const setsEl = $('.sets', li);
     ex.sets.forEach((s, j) => {
@@ -402,6 +542,7 @@ function drawExercises() {
         <button class="icon-btn small" aria-label="Delete set ${j + 1}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
       const reps = $('.reps', row), weight = $('.weight', row);
       reps.value = s.reps; weight.value = s.weight;
+      if (s.hint) { reps.placeholder = s.hint.reps; weight.placeholder = s.hint.weight; }
       reps.addEventListener('input', () => { s.reps = reps.value; reps.removeAttribute('aria-invalid'); persistDraft(); });
       weight.addEventListener('input', () => { s.weight = weight.value; weight.removeAttribute('aria-invalid'); persistDraft(); });
       $('button', row).addEventListener('click', () => { ex.sets.splice(j, 1); persistDraft(); drawExercises(); });
@@ -486,16 +627,31 @@ $('#wk-finish').addEventListener('click', async () => {
   const btn = $('#wk-finish');
   btn.disabled = true;
   try {
-    if (draft.id) await api('PUT', `/workouts/${encodeURIComponent(draft.id)}`, payload);
-    else await api('POST', '/workouts', payload);
+    let history = [];
+    try { history = await loadAll(); } catch { /* PRs are a bonus; still save */ }
+    const saved = draft.id
+      ? await api('PUT', `/workouts/${encodeURIComponent(draft.id)}`, payload)
+      : await api('POST', '/workouts', payload);
     const planned = payload.status === 'planned';
     draft = null;
     persistDraft();
     invalidate();
-    toast(planned ? 'Workout planned' : 'Workout saved');
     selectedDay = payload.date;
     calMonth = payload.date.slice(0, 7);
     show('calendar');
+    if (planned) { toast('Workout planned'); return; }
+    openDetail(saved, 'Workout saved'); // has the Share button
+    const prs = findPRs(saved, history);
+    if (prs.size) {
+      const unit = getUnit();
+      const lines = [...prs].map(([i, p]) => {
+        const e = saved.exercises[i], s = e.sets[p.set];
+        return `${e.name} ${fmt(kgTo(s.weight, unit))} ${unit} × ${fmt(s.reps)}`;
+      });
+      toast(`🏆 New PR${prs.size > 1 ? 's' : ''}! ${lines.join(' · ')}`, 4500);
+    } else {
+      toast('Workout saved');
+    }
   } catch (e) {
     err.textContent = e.message; // the draft is still saved locally
     err.hidden = false;

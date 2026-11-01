@@ -268,8 +268,27 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, 0.35); }
 .settings-card .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 6px 16px; }
 
 .toast {
-  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 12px); transform: translateX(-50%); z-index: 100;
+  position: fixed; inset: auto; margin: 0; border: none; width: max-content; max-width: calc(100vw - 32px); text-align: center; left: 50%; top: calc(env(safe-area-inset-top) + 12px); transform: translateX(-50%); z-index: 100;
   background: var(--card); color: var(--label); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
-  padding: 12px 20px; border-radius: 999px; font-size: 15px; font-weight: 500;
+  padding: 12px 20px; border-radius: 20px; font-size: 15px; font-weight: 500;
   animation: fade var(--t) var(--ease);
 }
+
+/* Day list: card with a separate Share button */
+.workout-item { position: relative; }
+.workout-item .card-share {
+  position: absolute; right: 10px; bottom: 8px; min-height: 44px; padding: 0 14px;
+  border: none; background: none; color: var(--accent); font-size: 15px; font-weight: 600;
+}
+
+/* "Last time" hint under an exercise name */
+.last-time { margin: 0 4px 6px; font-size: 14px; color: var(--label-2); }
+.last-time:empty { display: none; }
+
+/* Share sheet */
+.share-preview {
+  display: block; width: 100%; max-width: 360px; margin: 0 auto; aspect-ratio: 4 / 5;
+  border-radius: 16px; background: #000; box-shadow: var(--shadow);
+}
+.two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.two-up .btn { margin-top: 16px; }
