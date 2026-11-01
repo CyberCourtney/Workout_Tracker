@@ -521,7 +521,7 @@ const Crew = (() => {
         InvalidPasswordException: 'That password is too weak. Use 12+ characters with upper and lower case letters and a number.',
         CodeMismatchException: 'That code doesn’t match. Check the email and try again.',
         ExpiredCodeException: 'That code has expired. Send a new one below.',
-        UserLambdaValidationException: msg.replace(/^PreSignUp failed with error /, '').replace(/\.$/, '.') || 'That invite code didn’t work.',
+        UserLambdaValidationException: msg.replace(/^PreSignUp failed with error /, '').replace(/\.+$/, '.') || 'That invite code didn’t work.',
         TooManyRequestsException: 'Too many attempts. Wait a minute and try again.',
         LimitExceededException: 'Too many attempts. Wait a few minutes and try again.',
       }[type] || msg || 'Something went wrong. Please try again.');
