@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 640" role="img" aria-labelledby="t">
+  <title id="t">A tall athlete in a coral tank top striding forward with a kettlebell, checking his workout on his phone</title>
+  <defs>
+    <linearGradient id="kb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFC970"/><stop offset="1" stop-color="#F29A1F"/>
+    </linearGradient>
+    <linearGradient id="tank" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8080"/><stop offset="1" stop-color="#F25555"/>
+    </linearGradient>
+    <linearGradient id="shorts" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7D6EF0"/><stop offset="1" stop-color="#5A4AD6"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B1C3A"/><stop offset="1" stop-color="#0F1024"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="160" cy="622" rx="112" ry="12" fill="#0F1024" opacity=".18"/>
+
+  <!-- BACK LEG (his left, stepping back) -->
+  <path d="M168 330 C168 384 178 432 194 470 L220 466 C212 420 208 372 210 330 Z" fill="#43291B"/>
+  <path d="M194 464 C192 500 206 540 222 578 L244 572 C238 548 240 520 236 496 C232 480 226 470 220 462 Z" fill="#43291B"/>
+  <path d="M220 568 L246 562 L250 586 L224 592 Z" fill="#B8F23A"/>
+  <path d="M220 588 C220 578 252 574 262 582 C276 592 284 600 280 608 L222 608 C218 602 218 596 220 588 Z" fill="#2EC5FF"/>
+  <rect x="220" y="602" width="62" height="8" rx="4" fill="#0F1024"/>
+
+  <!-- FRONT LEG (his right, stepping forward) -->
+  <path d="M110 330 C102 382 102 432 108 472 L136 474 C142 430 154 382 158 330 Z" fill="#5A3825"/>
+  <path d="M146 336 C140 388 136 432 134 472 L124 472 C128 430 134 386 140 336 Z" fill="#43291B" opacity=".5"/>
+  <path d="M108 466 C96 494 96 532 102 580 L122 582 C124 548 138 506 136 470 Z" fill="#5A3825"/>
+  <path d="M126 480 C132 506 124 548 120 582 L114 582 C118 548 124 510 120 480 Z" fill="#43291B" opacity=".55"/>
+  <path d="M98 572 L124 574 L122 596 L96 594 Z" fill="#B8F23A"/>
+  <path d="M94 592 C92 584 124 582 128 592 C134 600 132 606 128 610 L60 610 C56 602 64 598 78 596 Z" fill="#2EC5FF"/>
+  <rect x="58" y="604" width="74" height="8" rx="4" fill="#0F1024"/>
+  <path d="M72 598 L104 596" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+
+  <!-- SHORTS -->
+  <path d="M114 252 L208 252 L220 356 L172 362 L162 312 L152 362 L100 356 Z" fill="url(#shorts)"/>
+  <path d="M114 252 L208 252 L209 266 L113 266 Z" fill="#4A3BC4"/>
+  <path d="M198 270 L218 354 L209 356 L191 272 Z" fill="#B8F23A"/>
+
+  <!-- BACK ARM (his left) holding the phone up -->
+  <path d="M212 126 C238 132 248 168 240 208 L216 210 C216 188 210 166 198 150 Z" fill="#43291B"/>
+  <path d="M240 200 C242 226 226 246 198 254 L190 236 C206 232 216 222 216 206 Z" fill="#43291B"/>
+
+  <!-- TORSO / TANK TOP -->
+  <path d="M102 128 C120 118 140 114 160 114 C180 114 200 118 216 128 L208 196 C206 222 206 240 208 258 L114 258 C116 240 116 222 114 196 Z" fill="url(#tank)"/>
+  <!-- arm holes show the shoulders -->
+  <path d="M102 128 C116 124 124 130 126 146 C126 162 120 176 114 190 L104 150 Z" fill="#5A3825"/>
+  <path d="M216 128 C204 124 196 130 194 146 C194 162 200 176 208 190 L214 150 Z" fill="#43291B"/>
+  <!-- tank top neckline + side panel + stripe -->
+  <path d="M138 116 C144 134 176 134 182 116 C176 114 170 113 160 113 C150 113 144 114 138 116 Z" fill="#5A3825"/>
+  <path d="M146 116 C150 126 170 126 174 116 Z" fill="#43291B" opacity=".6"/>
+  <path d="M186 140 L208 196 C206 222 206 240 208 258 L190 258 Z" fill="#E14848" opacity=".55"/>
+  <path d="M128 176 L188 168 L189 180 L129 188 Z" fill="#FFB547"/>
+
+  <!-- NECK + HEAD -->
+  <path d="M148 92 L172 92 L174 116 C166 122 154 122 146 116 Z" fill="#43291B"/>
+  <ellipse cx="160" cy="66" rx="25" ry="31" fill="#5A3825"/>
+  <path d="M172 40 C186 50 188 78 178 92 C172 98 166 100 160 100 C170 90 176 64 172 40 Z" fill="#43291B" opacity=".7"/>
+  <ellipse cx="135" cy="70" rx="5" ry="8" fill="#5A3825"/>
+  <ellipse cx="185" cy="70" rx="5" ry="8" fill="#43291B"/>
+  <!-- short hair -->
+  <path d="M134 60 C132 38 146 30 160 30 C176 30 188 38 186 60 C182 48 176 44 160 44 C146 44 138 48 134 60 Z" fill="#1A1110"/>
+  <!-- short beard -->
+  <path d="M138 76 C140 92 150 98 160 98 C170 98 180 92 182 76 C178 86 172 90 160 90 C148 90 142 86 138 76 Z" fill="#1A1110"/>
+  <!-- face: brows, eyes, smile -->
+  <path d="M144 60 L154 58" stroke="#1A1110" stroke-width="3" stroke-linecap="round"/>
+  <path d="M166 58 L176 60" stroke="#1A1110" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="150" cy="67" r="2.6" fill="#1A1110"/>
+  <circle cx="170" cy="67" r="2.6" fill="#1A1110"/>
+  <path d="M152 82 C156 86 164 86 168 82" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+  <!-- FRONT ARM (his right) carrying the kettlebell -->
+  <path d="M106 128 C80 132 72 168 76 206 L102 208 C104 186 110 164 120 148 Z" fill="#5A3825"/>
+  <path d="M94 140 C84 156 82 182 86 206 L94 206 C92 184 94 160 100 144 Z" fill="#43291B" opacity=".35"/>
+  <path d="M76 200 C70 220 76 248 86 272 L108 270 C104 246 104 222 102 202 Z" fill="#5A3825"/>
+  <path d="M96 206 C96 230 98 252 102 270 L108 270 C104 248 104 224 102 204 Z" fill="#43291B" opacity=".45"/>
+  <!-- wrist band -->
+  <rect x="84" y="260" width="26" height="10" rx="4" fill="#2EC5FF"/>
+  <!-- kettlebell -->
+  <path d="M80 288 C80 264 118 264 118 288" stroke="#0F1024" stroke-width="9" fill="none" stroke-linecap="round"/>
+  <circle cx="99" cy="318" r="32" fill="url(#kb)"/>
+  <path d="M78 304 C84 293 94 289 105 290" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" fill="none" opacity=".55"/>
+  <rect x="81" y="345" width="36" height="8" rx="4" fill="#E08A12"/>
+  <ellipse cx="98" cy="279" rx="13" ry="9" fill="#5A3825"/>
+
+  <!-- PHONE in his left hand -->
+  <g transform="rotate(-12 180 214)">
+    <rect x="160" y="178" width="44" height="78" rx="9" fill="#0F1024"/>
+    <rect x="164" y="184" width="36" height="66" rx="6" fill="url(#screen)"/>
+    <path d="M168 236 L176 228 L182 232 L194 216" stroke="#B8F23A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <rect x="168" y="190" width="18" height="4" rx="2" fill="#F7F7FB" opacity=".9"/>
+    <rect x="168" y="198" width="26" height="3" rx="1.5" fill="#B9BBD6" opacity=".6"/>
+    <circle cx="194" cy="216" r="3" fill="#B8F23A"/>
+  </g>
+  <!-- fingers over the phone edge -->
+  <path d="M180 246 C176 236 184 228 194 234 L200 250 C194 256 184 256 180 246 Z" fill="#43291B"/>
+</svg>

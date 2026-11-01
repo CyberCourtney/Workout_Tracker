@@ -9,9 +9,10 @@
   const W = 1080, H = 1350;
   const PAD = 72;
   const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
+  // Same palette as the app (styles.css): navy base, colourful accents.
   const C = {
-    bg: '#000000', card: '#1c1c1e', chip: '#2c2c2e', text: '#ffffff',
-    text2: 'rgba(235,235,245,0.62)', accent: '#0A84FF', onAccent: '#ffffff',
+    bg: '#0F1024', card: '#1B1C3A', chip: '#262849', text: '#F7F7FB', text2: '#B9BBD6',
+    violet: '#6C5CE7', sky: '#2EC5FF', coral: '#FF6B6B', mango: '#FFB547', lime: '#B8F23A', onColour: '#0F1024',
   };
   const MIN_SCALE = 0.72; // smallest set text = 30px * 0.72 ≈ 22px on a 1080px image
   const KG_PER_LB = 0.45359237;
@@ -104,6 +105,7 @@
       const cardH = cardPad + nameH + Math.round(16 * s) + chipsH + cardPad;
       if (draw) {
         roundRect(ctx, PAD, y, innerW, cardH, 20, C.card);
+        roundRect(ctx, PAD, y, 8, cardH, 4, C.coral); // coral = workout colour
         ctx.textBaseline = 'top';
         ctx.fillStyle = C.text;
         ctx.font = `600 ${nameSize}px ${FONT}`;
@@ -121,7 +123,7 @@
         }
         for (const ch of chips) {
           const x = PAD + cardPad + ch.x, cy = chipTop + ch.row * (chipH + gap);
-          roundRect(ctx, x, cy, ch.w, chipH, chipH / 2, ch.pr ? 'rgba(10,132,255,0.22)' : C.chip);
+          roundRect(ctx, x, cy, ch.w, chipH, chipH / 2, ch.pr ? 'rgba(255,181,71,0.22)' : C.chip);
           ctx.font = `500 ${chipSize}px ${FONT}`;
           ctx.fillStyle = C.text;
           ctx.textBaseline = 'middle';
@@ -131,9 +133,9 @@
           report.push({ text: ch.label, x: tx, y: cy, w: tw, h: chipH, maxW: ch.w - chipPadX * 2 - (ch.badgeW ? ch.badgeW + Math.round(10 * s) : 0) });
           if (ch.pr) {
             const bx = tx + tw + Math.round(10 * s), by = cy + (chipH - badgeH) / 2;
-            roundRect(ctx, bx, by, ch.badgeW, badgeH, badgeH / 2, C.accent);
+            roundRect(ctx, bx, by, ch.badgeW, badgeH, badgeH / 2, C.mango);
             ctx.font = `700 ${badgeSize}px ${FONT}`;
-            ctx.fillStyle = C.onAccent;
+            ctx.fillStyle = C.onColour;
             ctx.fillText('PR', bx + badgePadX, by + badgeH / 2);
             report.push({ text: 'PR', x: bx + badgePadX, y: by, w: ctx.measureText('PR').width, h: badgeH, maxW: ch.badgeW - badgePadX * 2 });
           }
@@ -166,16 +168,21 @@
 
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
-    const glow = ctx.createRadialGradient(W, 0, 0, W, 0, 900);
-    glow.addColorStop(0, 'rgba(10,132,255,0.28)');
-    glow.addColorStop(1, 'rgba(10,132,255,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, H);
+    // soft colour blobs, like the app's backgrounds
+    for (const [x, y, r, rgb, a] of [[W, 0, 760, '108,92,231', 0.45], [0, H * 0.55, 620, '46,197,255', 0.18], [W * 0.8, H, 560, '255,107,107', 0.16]]) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(${rgb},${a})`);
+      g.addColorStop(1, `rgba(${rgb},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // Header: wordmark + date
     let y = PAD;
-    roundRect(ctx, PAD, y + 2, 40, 40, 11, C.accent);
-    ctx.strokeStyle = C.onAccent; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    const mark = ctx.createLinearGradient(PAD, y, PAD + 40, y + 40);
+    mark.addColorStop(0, '#8C7CF0'); mark.addColorStop(1, C.sky);
+    roundRect(ctx, PAD, y + 2, 40, 40, 11, mark);
+    ctx.strokeStyle = C.onColour; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(PAD + 10, y + 32); ctx.lineTo(PAD + 18, y + 22); ctx.lineTo(PAD + 24, y + 27); ctx.lineTo(PAD + 31, y + 13); ctx.stroke();
     text('Workouts', PAD + 56, y + 2, `700 36px ${FONT}`, C.text);
     y += 72;
@@ -197,7 +204,7 @@
       let size = 60;
       ctx.font = `700 ${size}px ${FONT}`;
       while (size > 32 && ctx.measureText(v).width > tileW - 48) { size -= 2; ctx.font = `700 ${size}px ${FONT}`; }
-      text(v, x + 28, y + 30, `700 ${size}px ${FONT}`, i === 0 ? C.accent : C.text);
+      text(v, x + 28, y + 30, `800 ${size}px ${FONT}`, [C.coral, C.sky, C.lime][i]);
       report[report.length - 1].maxW = tileW - 48;
       text(label, x + 28, y + 108, `500 28px ${FONT}`, C.text2);
       report[report.length - 1].maxW = tileW - 48;

@@ -3,9 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0F1024">
+  <script>
+    // Theme before first paint: dark unless Light was picked in Settings.
+    try { document.documentElement.dataset.theme = localStorage.getItem('wt.theme') === 'light' ? 'light' : 'dark'; }
+    catch { document.documentElement.dataset.theme = 'dark'; }
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Workouts">
@@ -19,6 +23,142 @@
 <body>
   <div id="boot" class="boot">
     <p id="boot-msg">Loading…</p>
+  </div>
+
+  <!-- LANDING (shown when signed out; same page so the Cognito callback URL stays "/") -->
+  <div id="landing" class="landing" hidden>
+    <div class="lp-wrap">
+      <nav class="lp-nav" aria-label="Workouts">
+        <a class="brand" href="#top"><img src="icon.svg" alt="" width="34" height="34">Workouts</a>
+        <button class="btn primary" data-sign-in>Sign in</button>
+      </nav>
+
+      <section class="hero" id="top">
+        <span class="blob v"></span><span class="blob s"></span><span class="blob m"></span>
+        <div class="hero-grid">
+          <div class="reveal">
+            <span class="eyebrow">Invite only · for the crew</span>
+            <h1><span class="ln">Lift heavy.</span> <span class="ln">Log it.</span> <span class="ln grad-text">Talk your trash.</span></h1>
+            <p class="sub">Type your sets as you go, watch your line go up, and send the receipts to the group chat when you out-lift your mates.</p>
+            <div class="cta-row">
+              <button class="btn primary" data-sign-in>Sign in</button>
+              <span class="note">No plans to fill in. Just lift.</span>
+            </div>
+          </div>
+          <div class="hero-art reveal">
+            <div class="phone" aria-hidden="true"><div class="screen" style="--c:#FF6B6B">
+            <div class="m-title">Workout</div>
+            <div class="m-card"><b>Bench press</b><div class="m-hint">Last time: 8 × 60 kg</div>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#2EC5FF">3</i><span>6</span><span>65 kg</span></div></div>
+            <div class="m-card"><b>Pull-ups</b>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>10</span><span>0 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>0 kg</span></div></div>
+            <div class="m-btn">Finish</div>
+            <div class="m-tab"><span>Calendar</span><span class="on">Workout</span><span>Progress</span></div>
+          </div></div>
+            <img class="athlete" src="assets/athlete.svg" alt="Illustration of a tall athlete striding forward with a kettlebell and his phone">
+            <span class="chip pr">🏆 New PR: 65 kg</span>
+            <span class="chip streak">3 sessions this week</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="lp-section" aria-labelledby="features-h">
+        <span class="blob c" style="width:220px;height:220px;right:-80px;top:20px"></span>
+        <h2 id="features-h" class="reveal">Everything you need. <span class="grad-text">Nothing you don't.</span></h2>
+        <p class="lede reveal">Four things, done properly, so logging never gets in the way of lifting.</p>
+        <div class="feature-grid">
+          <article class="card feature coral reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg></div>
+            <h3>Log as you go</h3>
+            <p>Type each set as you do it. No plans to fill in first, and it shows what you lifted last time.</p>
+          </article>
+          <article class="card feature sky reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 15h2M14 15h2"/></svg></div>
+            <h3>Calendar history</h3>
+            <p>Every session lands on a calendar, so you can check exactly what you did on any day.</p>
+          </article>
+          <article class="card feature lime reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></div>
+            <h3>Progress charts</h3>
+            <p>Pick a lift and watch your estimated max, volume or top set climb week after week.</p>
+          </article>
+          <article class="card feature mango reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></div>
+            <h3>Share your session</h3>
+            <p>Turn any workout into a card with your PRs on it. Screenshots are for amateurs.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lp-section" aria-labelledby="how-h">
+        <span class="blob l" style="width:200px;height:200px;left:-90px;bottom:0"></span>
+        <h2 id="how-h" class="reveal">How it works</h2>
+        <p class="lede reveal">Three steps. You've done harder things before breakfast.</p>
+        <ol class="steps">
+          <li class="card reveal" style="--c:var(--coral)"><span class="num">1</span><div><h3>Start a workout</h3><p>Tap Start Workout. It's dated today and ready to go.</p></div></li>
+          <li class="card reveal" style="--c:var(--mango)"><span class="num">2</span><div><h3>Add sets as you go</h3><p>Reps and weight, set by set. Close the app mid-session and it's still there.</p></div></li>
+          <li class="card reveal" style="--c:var(--lime)"><span class="num">3</span><div><h3>Watch the line go up</h3><p>Finish, catch your PR, check the chart. Then remind everyone.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="lp-section" aria-labelledby="preview-h">
+        <span class="blob v" style="width:260px;height:260px;right:-100px;top:60px"></span>
+        <h2 id="preview-h" class="reveal">A look inside</h2>
+        <p class="lede reveal">Built for one-handed use between sets.</p>
+        <div class="preview-row reveal">
+          <figure><div class="phone" aria-hidden="true"><div class="screen" style="--c:#FF6B6B">
+            <div class="m-title">Workout</div>
+            <div class="m-card"><b>Bench press</b><div class="m-hint">Last time: 8 × 60 kg</div>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#2EC5FF">3</i><span>6</span><span>65 kg</span></div></div>
+            <div class="m-card"><b>Pull-ups</b>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>10</span><span>0 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>0 kg</span></div></div>
+            <div class="m-btn">Finish</div>
+            <div class="m-tab"><span>Calendar</span><span class="on">Workout</span><span>Progress</span></div>
+          </div></div><figcaption>Log every set</figcaption></figure>
+          <figure><div class="phone" aria-hidden="true"><div class="screen" style="--c:#2EC5FF">
+              <div class="m-title">Calendar</div>
+              <div class="m-card"><b>November</b>
+                <div class="m-cal"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span class="d">1</span>
+                  <span>2</span><span class="d">3</span><span>4</span><span class="d">5</span><span>6</span><span class="t">7</span><span>8</span>
+                  <span>9</span><span class="p">10</span><span>11</span><span class="p">12</span><span>13</span><span>14</span><span>15</span></div></div>
+              <div class="m-card"><b>Today · Push day</b><span style="color:#B9BBD6">Bench press, Overhead press, Dips</span></div>
+              <div class="m-tab"><span class="on">Calendar</span><span>Workout</span><span>Progress</span></div>
+            </div></div><figcaption>Every day on record</figcaption></figure>
+          <figure><div class="phone" aria-hidden="true"><div class="screen" style="--c:#B8F23A">
+              <div class="m-title">Progress</div>
+              <div class="m-seg"><span class="on">Est. 1RM</span><span>Volume</span><span>Top set</span></div>
+              <div class="m-card"><b>Bench press</b>
+                <svg viewBox="0 0 180 90" style="width:100%;height:auto;display:block">
+                  <defs><linearGradient id="mf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B8F23A" stop-opacity=".45"/><stop offset="1" stop-color="#B8F23A" stop-opacity="0"/></linearGradient></defs>
+                  <path d="M4 78 L34 70 L64 64 L94 52 L124 44 L154 30 L176 14 L176 88 L4 88 Z" fill="url(#mf)" stroke="none"/>
+                  <path d="M4 78 L34 70 L64 64 L94 52 L124 44 L154 30 L176 14" stroke="#B8F23A" stroke-width="3" fill="none"/>
+                  <circle cx="176" cy="14" r="4" fill="#B8F23A" stroke="#1B1C3A" stroke-width="2"/>
+                </svg></div>
+              <div class="m-stat"><div><strong>82 kg</strong><em>Best est. 1RM</em></div><div><strong>+12%</strong><em>Since September</em></div></div>
+              <div class="m-tab"><span>Calendar</span><span>Workout</span><span class="on">Progress</span></div>
+            </div></div><figcaption>Proof you're getting stronger</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="lp-cta reveal" aria-labelledby="cta-h">
+        <h2 id="cta-h">Ready to train?</h2>
+        <p>Your mates are already logging. Don't be the one with nothing to show.</p>
+        <button class="btn" data-sign-in>Sign in</button>
+        <p class="invite">Invite only. Ask Courtney for an account.</p>
+      </section>
+
+      <footer class="lp-footer">
+        <span>Workouts</span>
+        <span>© <span id="lp-year">2026</span></span>
+      </footer>
+    </div>
   </div>
 
   <main id="app" hidden>
@@ -69,8 +209,10 @@
       </header>
 
       <div id="wk-empty" class="empty-state">
-        <p>No workout in progress.</p>
-        <button class="btn primary" id="wk-start-empty">Start Workout</button>
+        <img class="art" src="assets/athlete.svg" alt="" width="150" height="300">
+        <p class="lead">Nothing on the bar yet.</p>
+        <p>Start a workout and log your sets as you go.</p>
+        <button class="btn hot" id="wk-start-empty">Start Workout</button>
       </div>
 
       <div id="wk-editor" hidden>
@@ -78,7 +220,7 @@
         <button class="btn secondary" id="wk-add-ex">+ Add exercise</button>
         <p id="wk-error" class="error" role="alert" hidden></p>
         <div class="wk-actions">
-          <button class="btn primary" id="wk-finish">Finish</button>
+          <button class="btn hot" id="wk-finish">Finish</button>
           <button class="btn text danger" id="wk-discard">Discard</button>
         </div>
       </div>
@@ -108,8 +250,9 @@
         </div>
       </div>
       <div id="prog-empty" class="empty-state" hidden>
-        <p>No completed workouts yet.</p>
-        <p class="muted">Finish a workout and your progress will show up here.</p>
+        <img class="art" src="assets/athlete.svg" alt="" width="150" height="300">
+        <p class="lead">No line to draw yet.</p>
+        <p>Finish a workout and your progress shows up here. Then it only goes up.</p>
       </div>
     </section>
 
@@ -161,6 +304,13 @@
         <div class="segmented small" id="unit-toggle" role="radiogroup" aria-label="Weight unit">
           <button role="radio" data-unit="kg">kg</button>
           <button role="radio" data-unit="lb">lb</button>
+        </div>
+      </div>
+      <div class="row">
+        <span>Appearance</span>
+        <div class="segmented small" id="theme-toggle" role="radiogroup" aria-label="Appearance">
+          <button role="radio" data-theme-choice="dark">Dark</button>
+          <button role="radio" data-theme-choice="light">Light</button>
         </div>
       </div>
     </div>
