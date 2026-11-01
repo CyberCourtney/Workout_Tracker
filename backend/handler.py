@@ -629,7 +629,7 @@ def crew_overview(event, pk):
         for g in own_goals(m["sub"]):
             prog = refresh_goal(g, workouts, m["memberId"])
             if g.get("status") == "active" or g.get("completedAt", "") >= add_days(today(), -14):
-                goals.append({"memberId": m["memberId"], "goalId": g["id"], "type": g["type"],
+                goals.append({"memberId": m["memberId"], "goalId": g["id"], "type": g["type"], "exercise": g.get("exercise"),
                               "label": goal_label(g), "status": g["status"], "deadline": g.get("deadline"),
                               "progressPct": prog["pct"], "value": prog["value"], "target": prog["target"]})
     feed = []
@@ -719,14 +719,15 @@ def all_comps():
 
 
 def rank(scored):
-    """[(member, score)] -> standings; ties share a rank; no-data goes last unranked."""
-    with_score = sorted([x for x in scored if x[1] is not None], key=lambda x: -x[1])
+    """[(member, score)] -> standings; ties share a rank. Anyone without a
+    positive score yet is listed unranked ("warming up"), never as last."""
+    with_score = sorted([x for x in scored if x[1] is not None and x[1] > 0], key=lambda x: -x[1])
     out, prev, r = [], None, 0
     for i, (m, s) in enumerate(with_score, 1):
         if s != prev:
             r, prev = i, s
         out.append((r, m, s))
-    return out + [(None, m, None) for m, s in scored if s is None]
+    return out + [(None, m, None) for m, s in scored if s is None or s <= 0]
 
 
 def comp_view(comp, sub, members_by_sub):

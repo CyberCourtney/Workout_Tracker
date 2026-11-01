@@ -283,8 +283,9 @@ class MetricTests(unittest.TestCase):
         self.assertEqual(handler.comp_score(comp, [w(x) for x in dates], on="2026-11-01"), 2.0)
 
     def test_rank_shares_ties_and_puts_no_data_unranked(self):
-        out = handler.rank([("a", 5.0), ("b", None), ("c", 9.0), ("d", 5.0)])
-        self.assertEqual([(r, m) for r, m, _ in out], [(1, "c"), (2, "a"), (2, "d"), (None, "b")])
+        out = handler.rank([("a", 5.0), ("b", None), ("c", 9.0), ("d", 5.0), ("e", 0.0), ("f", -3.0)])
+        self.assertEqual([(r, m) for r, m, _ in out], [(1, "c"), (2, "a"), (2, "d"), (None, "b"), (None, "e"), (None, "f")])
+        self.assertTrue(all(s is None for r, _, s in out if r is None))  # no low scores on show
 
 
 class GoalRouteTests(CrewBase):
