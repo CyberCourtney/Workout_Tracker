@@ -42,7 +42,7 @@
             <p class="sub">Log your sets as you go, see how far you've come, and celebrate every step forward at your own pace.</p>
             <div class="cta-row">
               <button class="btn primary" data-sign-in>Sign in</button>
-              <span class="note">No plans to fill in. Just move.</span>
+              <button class="btn-link" data-open-invite>Have an invite?</button>
             </div>
           </div>
           <div class="hero-art reveal">
@@ -152,6 +152,7 @@
         <p>Small, steady sessions add up. Start where you are.</p>
         <button class="btn" data-sign-in>Sign in</button>
         <p class="invite">Invite only. Ask Courtney for an account.</p>
+        <button class="btn-link invite-link" data-open-invite>Have an invite code? Create your account</button>
       </section>
 
       <footer class="lp-footer">
@@ -235,14 +236,20 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#gear"/></svg>
         </button>
       </header>
+      <div class="segmented mode" id="prog-mode" role="radiogroup" aria-label="Whose progress">
+        <button role="radio" data-mode="me" aria-checked="true">Me</button>
+        <button role="radio" data-mode="crew" aria-checked="false">Crew</button>
+      </div>
       <div id="prog-content">
         <label class="field-label" for="prog-exercise">Exercise</label>
         <select id="prog-exercise"></select>
         <div class="segmented" id="prog-metric" role="radiogroup" aria-label="Metric">
+          <button role="radio" data-metric="pct" hidden>% change</button>
           <button role="radio" data-metric="e1rm">Est. 1RM</button>
           <button role="radio" data-metric="volume">Volume</button>
           <button role="radio" data-metric="top">Top set</button>
         </div>
+        <div id="crew-chips" class="chips" role="group" aria-label="Who to show" hidden></div>
         <div class="card chart-card">
           <p class="chart-caption" id="chart-caption"></p>
           <div id="chart" class="chart"></div>
@@ -254,6 +261,40 @@
         <p class="lead">No line to draw yet.</p>
         <p>Finish a workout and your progress shows up here. Every session counts.</p>
       </div>
+    </section>
+
+    <!-- CREW -->
+    <section id="view-crew" class="view" hidden>
+      <header class="large-header">
+        <div>
+          <h1>Crew</h1>
+          <p class="subtitle" id="crew-sub">Training alongside each other</p>
+        </div>
+        <button class="icon-btn" data-open-settings aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#gear"/></svg>
+        </button>
+      </header>
+      <p id="crew-private" class="notice" hidden>You're not sharing with the crew right now, so they can't see your goals or join you in competitions. You can change this in Settings.</p>
+      <div class="segmented" id="crew-tabs" role="tablist" aria-label="Crew sections">
+        <button role="tab" data-crew-tab="goals" aria-selected="true">Goals</button>
+        <button role="tab" data-crew-tab="comps" aria-selected="false">Challenges</button>
+        <button role="tab" data-crew-tab="feed" aria-selected="false">Feed</button>
+      </div>
+      <div id="crew-goals" class="crew-pane">
+        <div class="section-head"><h2>Your goals</h2><button class="pill-btn" id="goal-new">+ New goal</button></div>
+        <ul id="my-goals" class="goal-list"></ul>
+        <div class="section-head"><h2>The crew's goals</h2></div>
+        <ul id="crew-goal-list" class="goal-list"></ul>
+      </div>
+      <div id="crew-comps" class="crew-pane" hidden>
+        <div class="section-head"><h2>Challenges</h2><button class="pill-btn" id="comp-new">+ New challenge</button></div>
+        <div id="comp-list"></div>
+        <details class="past" id="comp-past-wrap" hidden><summary>Past challenges</summary><div id="comp-past"></div></details>
+      </div>
+      <div id="crew-feed" class="crew-pane" hidden>
+        <ul id="feed-list" class="feed-list"></ul>
+      </div>
+      <p id="crew-error" class="empty" hidden></p>
     </section>
 
     <button class="fab" id="start-btn">Start Workout</button>
@@ -270,6 +311,10 @@
       <button data-view="progress">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>
         Progress
+      </button>
+      <button data-view="crew">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9.5" r="2.5"/><path d="M3.5 19c.6-3.4 2.8-5.2 5.5-5.2s4.9 1.8 5.5 5.2M14.5 14.6c.8-.5 1.6-.7 2.5-.7 2.2 0 3.9 1.5 4.4 4.6"/></svg>
+        Crew
       </button>
     </nav>
   </main>
@@ -314,7 +359,113 @@
         </div>
       </div>
     </div>
+    <div class="card settings-card" id="crew-settings" hidden>
+      <div class="row col">
+        <label for="set-name">Display name</label>
+        <div class="inline"><input id="set-name" maxlength="30" autocomplete="nickname"><button class="pill-btn" id="set-name-save">Save</button></div>
+      </div>
+      <div class="row col">
+        <span>Your colour</span>
+        <div class="swatches" id="set-colours" role="radiogroup" aria-label="Your colour"></div>
+      </div>
+      <div class="row">
+        <label for="set-sharing">Share my progress with the crew</label>
+        <input type="checkbox" id="set-sharing" class="switch">
+      </div>
+      <p class="hint">Friends only ever see your name, colour, chart lines, goal progress and challenge results. Never your workouts or sets.</p>
+    </div>
     <button class="btn text danger" id="sign-out">Sign Out</button>
+  </dialog>
+
+
+  <!-- First login: display name -->
+  <dialog id="onboard" class="sheet">
+    <form id="onboard-form" method="dialog">
+      <div class="sheet-head"><span></span><strong>Welcome to the crew</strong><span></span></div>
+      <p class="muted">What should everyone call you? You can change it any time in Settings.</p>
+      <label class="field-label" for="onboard-name">Display name</label>
+      <input id="onboard-name" class="text-input" maxlength="30" autocomplete="nickname" required>
+      <p id="onboard-error" class="error" hidden></p>
+      <button class="btn primary" type="submit">Let's go</button>
+    </form>
+  </dialog>
+
+  <!-- New goal -->
+  <dialog id="goal-dialog" class="sheet">
+    <form id="goal-form" method="dialog">
+      <div class="sheet-head"><button type="button" class="btn-link" data-close>Cancel</button><strong>New goal</strong><button class="btn-link" type="submit">Save</button></div>
+      <label class="field-label" for="goal-type">Goal</label>
+      <select id="goal-type">
+        <option value="weight">Lift a weight</option>
+        <option value="e1rm">Reach an estimated 1RM</option>
+        <option value="perWeek">Workouts per week</option>
+        <option value="volume">Total volume between dates</option>
+      </select>
+      <div id="goal-ex-wrap"><label class="field-label" for="goal-ex">Exercise</label><input id="goal-ex" class="text-input" list="exercise-names" autocomplete="off"></div>
+      <label class="field-label" for="goal-target" id="goal-target-label">Target</label>
+      <input id="goal-target" class="text-input" inputmode="decimal" required>
+      <div id="goal-range" class="two" hidden>
+        <div><label class="field-label" for="goal-start">From</label><input id="goal-start" type="date" class="text-input"></div>
+        <div><label class="field-label" for="goal-end">To</label><input id="goal-end" type="date" class="text-input"></div>
+      </div>
+      <label class="field-label" for="goal-deadline">Deadline (optional)</label>
+      <input id="goal-deadline" type="date" class="text-input">
+      <p id="goal-error" class="error" hidden></p>
+    </form>
+  </dialog>
+
+  <!-- New challenge -->
+  <dialog id="comp-dialog" class="sheet">
+    <form id="comp-form" method="dialog">
+      <div class="sheet-head"><button type="button" class="btn-link" data-close>Cancel</button><strong>New challenge</strong><button class="btn-link" type="submit">Create</button></div>
+      <label class="field-label" for="comp-name">Name</label>
+      <input id="comp-name" class="text-input" maxlength="40" placeholder="e.g. Spring strength" required>
+      <label class="field-label" for="comp-metric">Measure</label>
+      <select id="comp-metric">
+        <option value="e1rmPct">Biggest % improvement in estimated 1RM (fairest)</option>
+        <option value="workouts">Most workouts completed</option>
+        <option value="volume">Most total volume</option>
+        <option value="streak">Longest streak of weeks hitting a target</option>
+      </select>
+      <div id="comp-ex-wrap"><label class="field-label" for="comp-ex">Exercise</label><input id="comp-ex" class="text-input" list="exercise-names" autocomplete="off"></div>
+      <div id="comp-weekly-wrap" hidden><label class="field-label" for="comp-weekly">Workouts per week</label><input id="comp-weekly" class="text-input" inputmode="numeric" value="3"></div>
+      <div class="two">
+        <div><label class="field-label" for="comp-start">Starts</label><input id="comp-start" type="date" class="text-input" required></div>
+        <div><label class="field-label" for="comp-end">Ends</label><input id="comp-end" type="date" class="text-input" required></div>
+      </div>
+      <p class="hint">Everyone is measured against their own starting point, so it's about progress, not who's strongest.</p>
+      <p id="comp-error" class="error" hidden></p>
+    </form>
+  </dialog>
+
+  <!-- Invite sign-up (landing page) -->
+  <dialog id="invite" class="sheet">
+    <div class="sheet-head"><span></span><strong>Join the crew</strong><button class="btn-link" data-close>Close</button></div>
+    <form id="invite-form">
+      <p class="muted">Use the invite code Courtney gave you.</p>
+      <label class="field-label" for="inv-email">Email</label>
+      <input id="inv-email" type="email" class="text-input" autocomplete="email" required>
+      <label class="field-label" for="inv-pass">Password</label>
+      <input id="inv-pass" type="password" class="text-input" autocomplete="new-password" minlength="12" required>
+      <p class="hint">At least 12 characters, with upper and lower case letters and a number.</p>
+      <label class="field-label" for="inv-code">Invite code</label>
+      <input id="inv-code" class="text-input" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <p id="inv-error" class="error" role="alert" hidden></p>
+      <button class="btn primary" type="submit" id="inv-submit">Create account</button>
+    </form>
+    <form id="confirm-form" hidden>
+      <p class="muted">We've emailed you a 6-digit code. Enter it to confirm your email.</p>
+      <label class="field-label" for="inv-confirm">Confirmation code</label>
+      <input id="inv-confirm" class="text-input" inputmode="numeric" autocomplete="one-time-code" required>
+      <p id="confirm-error" class="error" role="alert" hidden></p>
+      <button class="btn primary" type="submit">Confirm</button>
+      <button class="btn text" type="button" id="inv-resend">Send the code again</button>
+    </form>
+    <div id="invite-done" hidden>
+      <p class="lead-text">You're in! 🎉</p>
+      <p class="muted">Sign in with your email and password to get started.</p>
+      <button class="btn primary" data-sign-in>Sign in</button>
+    </div>
   </dialog>
 
   <!-- Share preview sheet -->
@@ -340,5 +491,6 @@
   <script src="config.js"></script>
   <script src="share.js"></script>
   <script src="app.js"></script>
+  <script src="crew.js"></script>
 </body>
 </html>

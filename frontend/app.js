@@ -218,7 +218,7 @@ let currentView = 'calendar';
 function show(view) {
   currentView = view;
   document.body.dataset.view = view; // drives the feature colour in CSS
-  for (const v of ['calendar', 'workout', 'progress']) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ['calendar', 'workout', 'progress', 'crew']) $(`#view-${v}`).hidden = v !== view;
   $$('.tabbar button').forEach(b => {
     b.classList.toggle('on', b.dataset.view === view);
     b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false');
@@ -228,6 +228,7 @@ function show(view) {
   if (view === 'calendar') renderCalendar();
   if (view === 'workout') renderWorkout();
   if (view === 'progress') renderProgress();
+  if (view === 'crew') Crew.render();
 }
 function updateFab() {
   const fab = $('#start-btn');
@@ -667,6 +668,7 @@ $('#wk-finish').addEventListener('click', async () => {
     if (planned) { toast('Workout planned'); return; }
     openDetail(saved, 'Workout saved'); // has the Share button
     celebrate();
+    Crew.checkGoals();
     const prs = findPRs(saved, history);
     if (prs.size) {
       const unit = getUnit();
@@ -688,6 +690,8 @@ $('#wk-finish').addEventListener('click', async () => {
 
 // ------------------------------------------------------------ progress
 let metric = 'e1rm';
+let crewMetric = 'pct'; // Crew mode defaults to % change from start (fair across strength levels)
+let progMode = 'me';
 const METRICS = {
   e1rm: { label: 'Estimated 1RM', caption: 'Best estimated one-rep max (Epley)', agg: 'max',
     of: w => Math.max(0, ...w.sets.map(s => (s.reps > 0 ? (s.reps === 1 ? s.weight : s.weight * (1 + s.reps / 30)) : 0))) },
@@ -698,7 +702,11 @@ const METRICS = {
 };
 
 async function renderProgress() {
-  $$('#prog-metric button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.metric === metric)));
+  const crewMode = progMode === 'crew';
+  $$('#prog-mode button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.mode === progMode)));
+  $('#prog-metric [data-metric="pct"]').hidden = !crewMode;
+  $('#crew-chips').hidden = !crewMode;
+  $$('#prog-metric button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.metric === (crewMode ? crewMetric : metric))));
   let workouts;
   try { workouts = (await loadAll()).filter(w => w.status === 'completed'); }
   catch (e) { toast(e.message); return; }
@@ -711,6 +719,12 @@ async function renderProgress() {
     c.n++;
     names.set(k, c);
   }
+  if (crewMode) {
+    $('#prog-empty').hidden = true;
+    $('#prog-content').hidden = false;
+    return Crew.renderChart(names, crewMetric);
+  }
+  Crew.leaveCrewMode();
   $('#prog-empty').hidden = names.size > 0;
   $('#prog-content').hidden = names.size === 0;
   if (!names.size) return;
@@ -737,7 +751,11 @@ async function renderProgress() {
   drawChart(points, unit);
 }
 $('#prog-exercise').addEventListener('change', renderProgress);
-$$('#prog-metric button').forEach(b => b.addEventListener('click', () => { metric = b.dataset.metric; renderProgress(); }));
+$$('#prog-metric button').forEach(b => b.addEventListener('click', () => {
+  if (progMode === 'crew') crewMetric = b.dataset.metric; else metric = b.dataset.metric;
+  renderProgress();
+}));
+$$('#prog-mode button').forEach(b => b.addEventListener('click', () => { progMode = b.dataset.mode; renderProgress(); }));
 
 function niceTicks(lo, hi, count = 4) {
   if (lo === hi) { lo = Math.max(0, lo - 1); hi += 1; }
@@ -827,6 +845,7 @@ window.addEventListener('resize', () => {
 
 // ------------------------------------------------------------ settings
 function renderSettings() {
+  Crew.renderSettings();
   $$('#unit-toggle button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.unit === getUnit())));
   const theme = document.documentElement.dataset.theme;
   $$('#theme-toggle button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeChoice === theme)));
@@ -903,5 +922,7 @@ async function boot() {
   $('#boot').hidden = true;
   $('#app').hidden = false;
   show(draft ? 'workout' : 'calendar');
+  Crew.onSignedIn();
 }
-boot();
+// crew.js loads after this file and registers `Crew`; start once both have run.
+window.addEventListener('DOMContentLoaded', boot);
