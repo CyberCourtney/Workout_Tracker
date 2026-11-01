@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 640" role="img" aria-labelledby="t">
-  <title id="t">A tall athlete in a coral tank top striding forward with a kettlebell, checking his workout on his phone</title>
+  <title id="t">A tall athlete in a coral tank top striding forward with a dumbbell, checking his workout on his phone</title>
   <defs>
     <linearGradient id="kb" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#FFC970"/><stop offset="1" stop-color="#F29A1F"/>
@@ -72,19 +72,23 @@
   <circle cx="170" cy="67" r="2.6" fill="#1A1110"/>
   <path d="M152 82 C156 86 164 86 168 82" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"/>
 
-  <!-- FRONT ARM (his right) carrying the kettlebell -->
+  <!-- FRONT ARM (his right) holding the dumbbell -->
   <path d="M106 128 C80 132 72 168 76 206 L102 208 C104 186 110 164 120 148 Z" fill="#5A3825"/>
   <path d="M94 140 C84 156 82 182 86 206 L94 206 C92 184 94 160 100 144 Z" fill="#43291B" opacity=".35"/>
   <path d="M76 200 C70 220 76 248 86 272 L108 270 C104 246 104 222 102 202 Z" fill="#5A3825"/>
   <path d="M96 206 C96 230 98 252 102 270 L108 270 C104 248 104 224 102 204 Z" fill="#43291B" opacity=".45"/>
   <!-- wrist band -->
   <rect x="84" y="260" width="26" height="10" rx="4" fill="#2EC5FF"/>
-  <!-- kettlebell -->
-  <path d="M80 288 C80 264 118 264 118 288" stroke="#0F1024" stroke-width="9" fill="none" stroke-linecap="round"/>
-  <circle cx="99" cy="318" r="32" fill="url(#kb)"/>
-  <path d="M78 304 C84 293 94 289 105 290" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" fill="none" opacity=".55"/>
-  <rect x="81" y="345" width="36" height="8" rx="4" fill="#E08A12"/>
-  <ellipse cx="98" cy="279" rx="13" ry="9" fill="#5A3825"/>
+  <!-- dumbbell, held at his side -->
+  <rect x="64" y="275" width="68" height="9" rx="4.5" fill="#0F1024"/>
+  <rect x="52" y="256" width="16" height="46" rx="6" fill="url(#kb)"/>
+  <rect x="128" y="256" width="16" height="46" rx="6" fill="url(#kb)"/>
+  <rect x="44" y="263" width="10" height="32" rx="4" fill="#E08A12"/>
+  <rect x="142" y="263" width="10" height="32" rx="4" fill="#E08A12"/>
+  <rect x="55" y="260" width="4" height="22" rx="2" fill="#FFFFFF" opacity=".55"/>
+  <rect x="131" y="260" width="4" height="22" rx="2" fill="#FFFFFF" opacity=".55"/>
+  <ellipse cx="98" cy="279" rx="13" ry="10" fill="#5A3825"/>
+  <path d="M88 276 C92 272 104 272 108 276" stroke="#43291B" stroke-width="2" fill="none" stroke-linecap="round"/>
 
   <!-- PHONE in his left hand -->
   <g transform="rotate(-12 180 214)">
