@@ -437,7 +437,7 @@ dialog.sheet::backdrop { background: rgba(8, 8, 20, 0.55); -webkit-backdrop-filt
   position: absolute; z-index: 3; padding: 10px 14px; border-radius: 16px; font-size: 14px; font-weight: 800;
   color: var(--on-colour); box-shadow: var(--shadow-coral); animation: float 4s ease-in-out infinite; animation-delay: -2s;
 }
-.hero-art .chip.pr { background: var(--grad-hot); left: 46%; top: 10px; }
+.hero-art .chip.pr { background: var(--sky); box-shadow: var(--shadow-sky); left: 48%; top: 14px; padding: 7px 11px; font-size: 12px; border-radius: 12px; }
 .hero-art .chip.streak { background: var(--lime); right: 6%; bottom: 40px; box-shadow: var(--shadow-lime); animation-delay: -1s; }
 
 /* Phone mockup (pure HTML/CSS) */
