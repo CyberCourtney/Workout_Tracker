@@ -35,8 +35,8 @@ Along the way it picked up a landing page, its own domain
 record celebrations and a shareable image of each workout.
 
 **It's also another hands-on AWS project.** I'm building my cloud skills
-by making real things I actually use, and a workout tracker for one
-person is a nice problem to get right: it needs a proper login, it has
+by making real things I actually use, and a workout tracker for me and a
+few friends is a nice problem to get right: it needs a proper login, it has
 to keep my data safe and private, and it should cost close to nothing
 to run, because it sits idle for most of the day. That's why it's fully
 serverless with on-demand billing, why login is Cognito rather than
@@ -74,14 +74,13 @@ with a light mode in Settings.
 
 ## How it works
 
-```
-Phone browser
-   │  HTTPS
-   ├──► CloudFront ──(Origin Access Control)──► private S3 bucket  (landing page + app: index.html, styles.css, app.js, crew.js, share.js, config.js)
-   ├──► Cognito managed login  (branded sign-in, authorization code + PKCE)
-   │      └── invite-only sign-up ──► Pre sign-up Lambda (checks the invite code)
-   └──► API Gateway HTTP API ──(JWT authorizer: Cognito)──► Lambda (Python 3.12) ──► DynamoDB (on-demand)
-```
+![Architecture: phone to CloudFront and S3 for the site, Cognito for sign-in with an invite-code Lambda, and API Gateway to a Python Lambda and DynamoDB for data](docs/architecture.svg)
+
+Three things happen when I open the app on my phone:
+
+1. **Load the app.** Cloudflare DNS points my domain at CloudFront, which serves the site from a private S3 bucket over HTTPS. The certificate comes from ACM in us-east-1, because that's the only region CloudFront accepts.
+2. **Sign in.** Cognito's managed login (themed to match the app) handles passwords, using the authorization code flow with PKCE. When a friend signs up, a small Pre sign-up Lambda checks their invite code first.
+3. **Log and read workouts.** The app calls an API Gateway HTTP API with its token. The JWT authorizer checks it against Cognito before anything runs, then a Python Lambda reads or writes the one DynamoDB table.
 
 | Piece | What it does | Idle cost |
 |---|---|---|
@@ -128,10 +127,15 @@ backend/presignup.py       Cognito Pre sign-up trigger (invite code check)
 backend/test_handler.py    Unit tests (unittest + unittest.mock)
 backend/test_crew.py       Crew tests: isolation, privacy, invite code, goal/challenge maths
 infra/certificate.yaml     ACM certificate for the custom domain (us-east-1)
-frontend/                  index.html, styles.css, app.js, crew.js, share.js, config.js (generated), manifest + icons
+frontend/                  index.html, styles.css, app.js, crew.js, share.js, config.js (blank; filled at deploy), manifest + icons
 scripts/deploy.sh          Validates, deploys, uploads code and site; echoes every command
 scripts/deploy-certificate.sh  Creates the us-east-1 certificate and prints its DNS validation record
 tests/share-render.html    Browser test for the share image
+docs/architecture.svg      The diagram above
+docs/PROMPT.md             The prompts I used to build it with Claude Code
+docs/SOCIAL_DESIGN.md      Crew design and privacy rules
+docs/contrast.md           WCAG contrast checks for every text colour
+docs/screenshots/          Screenshots of each screen
 docs/share-samples/        Sample share images
 ```
 
@@ -168,9 +172,9 @@ Prerequisites: AWS CLI v2 signed in to the account you want to use, and `zip`.
 3. `aws cloudformation deploy --stack-name workout-tracker --template-file infra/template.yaml --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset [--parameter-overrides ...]` (first run takes about 5 minutes, mostly CloudFront)
 4. `aws cloudformation describe-stacks` to read the outputs (site URL, API URL, user pool ID, client ID, Hosted UI domain, bucket, distribution, function).
 5. Zip `backend/handler.py` and `aws lambda update-function-code`, then `aws lambda wait function-updated`.
-6. Write the outputs into `frontend/config.js`.
    It also uploads `backend/presignup.py` to the Pre sign-up Lambda the same way.
-7. `aws s3 sync frontend/ s3://<bucket>/ --delete`, `aws s3 cp` for `manifest.webmanifest` (sets its content type), then `aws cloudfront create-invalidation --paths "/*"`.
+6. Copy `frontend/` to a temporary folder and write the outputs into that copy's `config.js`.
+7. `aws s3 sync <temporary folder>/ s3://<bucket>/ --delete`, `aws s3 cp` for `manifest.webmanifest` (sets its content type), then `aws cloudfront create-invalidation --paths "/*"`.
 
 The deploy step reads the stack's current parameters first (`describe-stacks`) and asks for the crew invite code if none is set yet. It's masked as `InviteCode=****` in the printed commands.
 
@@ -179,7 +183,7 @@ aws sso login --profile <your-profile>        # only if your profile uses SSO
 AWS_PROFILE=<your-profile> AWS_REGION=eu-west-2 ./scripts/deploy.sh
 ```
 
-After a deploy, `frontend/config.js` contains that deployment's IDs. Don't commit it; `git checkout frontend/config.js` restores the blank version.
+`frontend/config.js` in the repo stays blank: the deployment's IDs only ever go into the temporary copy, so there's nothing to accidentally commit.
 
 ### Custom domain (e.g. workout.example.com)
 
@@ -246,3 +250,7 @@ aws cloudformation delete-stack --stack-name workout-tracker --profile <your-pro
 ```
 
 The DynamoDB table is kept (DeletionPolicy: Retain) so your history survives; delete it by hand in the console if you really want it gone. The S3 bucket must be emptied before the stack can delete it.
+
+## Licence
+
+[MIT](LICENSE). Build your own, change it, make it yours.
