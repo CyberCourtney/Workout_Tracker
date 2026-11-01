@@ -645,7 +645,8 @@ dialog .field-label { margin-top: 14px; }
 .chart-tip .tdate { font-size: 12px; color: #B9BBD6; font-weight: 700; }
 .chart-tip .trow { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
 .chart-tip .trow i { color: #B9BBD6; font-weight: 600; }
-.invite-link { display: block; margin: 0 auto; color: #0F1024; text-decoration: underline; font-size: 15px; }
-.hero .cta-row .btn-link { font-size: 16px; }
+/* "Have an invite?" buttons: coral to mango, navy text (6.8:1+) */
+.hero .cta-row .invite-btn { box-shadow: var(--shadow-coral); }
+.lp-cta .invite-btn { display: flex; width: auto; margin: 0 auto 14px; padding: 0 26px; min-height: 52px; background: var(--grad-hot); color: var(--on-colour); box-shadow: 0 12px 28px rgba(15, 16, 36, 0.35); }
 #prog-metric { gap: 6px; }
 #prog-metric button { white-space: nowrap; font-size: 14px; padding: 0 6px; }
