@@ -209,7 +209,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 /* ================================================================ calendar (sky) */
 .cal-card { padding: 14px 12px 16px; }
 .cal-nav { display: flex; align-items: center; gap: 0; margin-bottom: 8px; }
-.cal-nav h2 { flex: 1; min-width: 0; margin: 0 0 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 19px; font-weight: 800; order: -1; }
+.cal-nav h2 { flex: 1; min-width: 0; margin: 0 0 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 17px; font-weight: 800; order: -1; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .cal-weekdays span { text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; padding: 4px 0; }
 .cal-day {
@@ -228,6 +228,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .cal-day.today.selected .n { background: linear-gradient(var(--sky), var(--sky)) padding-box, var(--grad-hero) border-box; }
 .cal-day .marks { display: flex; gap: 3px; height: 8px; }
 .cal-blank { min-height: 50px; }
+.cal-nav .pill-btn { padding: 0 14px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.done { background: var(--sky); }
 .dot.planned { border: 2px solid var(--mango); }
@@ -341,6 +342,7 @@ select {
 .chart-caption { margin: 0 12px 4px; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .chart { height: 280px; touch-action: pan-y; }
 .chart svg { outline: none; display: block; width: 100%; height: 100%; overflow: visible; }
+.chart rect { stroke: none; }
 .chart .grid { stroke: var(--border); stroke-width: 1; }
 .chart .axis { fill: var(--text-2); stroke: none; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chart .line { stroke: var(--lime-ink); stroke-width: 3; }
@@ -505,7 +507,6 @@ dialog.sheet::backdrop { background: rgba(8, 8, 20, 0.55); -webkit-backdrop-filt
 .lp-cta p { margin: 0 auto; max-width: 36ch; color: #0F1024; font-weight: 600; }
 .lp-cta .btn { width: auto; display: inline-flex; margin: 24px auto 14px; padding: 0 32px; min-height: 56px; background: #0F1024; color: #F7F7FB; box-shadow: 0 12px 32px rgba(15, 16, 36, 0.4); }
 .lp-cta .invite { font-size: 14px; font-weight: 700; color: #0F1024; }
-.lp-cta .athlete-mini { position: absolute; right: -10px; bottom: -40px; height: 200px; opacity: 0.9; }
 
 .lp-footer { padding: 24px 0 calc(env(safe-area-inset-bottom) + 32px); color: var(--text-2); font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; border-top: 1px solid var(--border); }
 
@@ -531,8 +532,7 @@ dialog.sheet::backdrop { background: rgba(8, 8, 20, 0.55); -webkit-backdrop-filt
   .preview-row { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); grid-auto-columns: auto; overflow: visible; margin: 0; padding: 12px 0 28px; justify-items: center; }
   .lp-cta { padding: 88px 40px; }
   .lp-cta h2 { font-size: 56px; }
-  .lp-cta .athlete-mini { right: 40px; bottom: -30px; height: 280px; }
-}
+  }
 @media (min-width: 1100px) {
   .hero h1 { font-size: 76px; }
   .feature-grid { grid-template-columns: repeat(4, 1fr); }
