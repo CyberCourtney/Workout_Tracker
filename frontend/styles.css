@@ -520,6 +520,7 @@ dialog.sheet::backdrop { background: rgba(8, 8, 20, 0.55); -webkit-backdrop-filt
   .hero { padding: 48px 0 80px; }
   .hero-grid { grid-template-columns: 1.05fr 1fr; align-items: center; gap: 40px; }
   .hero h1 { font-size: 64px; }
+  .hero h1 .ln { display: block; }
   .hero .sub { font-size: 20px; }
   .hero-art { height: 560px; }
   .hero-art .athlete { height: 540px; }
@@ -534,6 +535,6 @@ dialog.sheet::backdrop { background: rgba(8, 8, 20, 0.55); -webkit-backdrop-filt
   .lp-cta h2 { font-size: 56px; }
   }
 @media (min-width: 1100px) {
-  .hero h1 { font-size: 76px; }
+  .hero h1 { font-size: 80px; }
   .feature-grid { grid-template-columns: repeat(4, 1fr); }
 }
