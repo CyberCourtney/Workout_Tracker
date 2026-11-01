@@ -442,14 +442,14 @@
   <dialog id="invite" class="sheet">
     <div class="sheet-head"><span></span><strong>Join the crew</strong><button class="btn-link" data-close>Close</button></div>
     <form id="invite-form">
-      <p class="muted">Use the invite code Courtney gave you.</p>
+      <label class="field-label" for="inv-code">Invite code</label>
+      <input id="inv-code" class="text-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the code Courtney sent you" required>
+      <p class="hint">Then create your account by adding your email and choosing a password. You'll use these to sign in.</p>
       <label class="field-label" for="inv-email">Email</label>
       <input id="inv-email" type="email" class="text-input" autocomplete="email" required>
       <label class="field-label" for="inv-pass">Password</label>
       <input id="inv-pass" type="password" class="text-input" autocomplete="new-password" minlength="12" required>
       <p class="hint">At least 12 characters, with upper and lower case letters and a number.</p>
-      <label class="field-label" for="inv-code">Invite code</label>
-      <input id="inv-code" class="text-input" autocomplete="off" autocapitalize="off" spellcheck="false" required>
       <p id="inv-error" class="error" role="alert" hidden></p>
       <button class="btn primary" type="submit" id="inv-submit">Create account</button>
     </form>
