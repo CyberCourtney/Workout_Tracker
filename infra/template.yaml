@@ -17,6 +17,11 @@ Parameters:
     Type: String
     Default: ""
     Description: Optional Route 53 hosted zone for DomainName. Empty = add the DNS record by hand (e.g. Cloudflare CNAME).
+  InviteCode:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: Code friends must enter to create an account (checked by the Pre sign-up trigger). Never stored in source.
 
 Conditions:
   HasDomain: !Not [!Equals [!Ref DomainName, ""]]
@@ -51,6 +56,9 @@ Resources:
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification: # crew feed items and cheer markers expire on their own (free)
+        AttributeName: expiresAt
+        Enabled: true
       SSESpecification:
         SSEEnabled: false # AWS-owned key: free (a customer-managed KMS key costs monthly)
 
@@ -62,7 +70,9 @@ Resources:
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true # self sign-up disabled
+        AllowAdminCreateUserOnly: false # self sign-up on, gated by the invite code
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignUpFunction.Arn
       Policies:
         PasswordPolicy:
           MinimumLength: 12
@@ -114,6 +124,63 @@ Resources:
         IdToken: hours
         RefreshToken: days
 
+  # ---------------------------------------------------------------- invite-only sign-up
+  PreSignUpRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: logs-only
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt PreSignUpLogGroup.Arn
+
+  PreSignUpLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-presignup"
+      RetentionInDays: 14
+
+  PreSignUpFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-presignup"
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: presignup.lambda_handler
+      MemorySize: 128
+      Timeout: 5
+      Role: !GetAtt PreSignUpRole.Arn
+      Environment:
+        Variables:
+          INVITE_CODE: !Ref InviteCode
+      LoggingConfig:
+        LogGroup: !Ref PreSignUpLogGroup
+      # Placeholder that refuses every sign-up until scripts/deploy.sh uploads
+      # backend/presignup.py (fails closed).
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              raise Exception("Sign-up is not open yet")
+
+  PreSignUpPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PreSignUpFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
   # ---------------------------------------------------------------- API
   ApiFunctionRole:
     Type: AWS::IAM::Role
@@ -132,6 +199,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
+                  - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                 Resource: !GetAtt WorkoutsTable.Arn
@@ -239,6 +307,115 @@ Resources:
       AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub "integrations/${ApiIntegration}"
 
+  # crew routes (docs/SOCIAL_DESIGN.md)
+  RouteMeGet:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /me
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteMePut:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: PUT /me
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsList:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /goals
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsCreate:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /goals
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsUpdate:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: PUT /goals/{id}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsDelete:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: DELETE /goals/{id}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCrew:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /crew
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCrewSeries:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /crew/series
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCrewCheers:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /crew/cheers
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCompsList:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /competitions
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCompsCreate:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /competitions
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCompsJoin:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /competitions/{id}/join
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -256,7 +433,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ApiFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/workouts*"
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*"
 
   # ---------------------------------------------------------------- frontend
   SiteBucket:
@@ -390,5 +567,7 @@ Outputs:
     Value: !Ref Distribution
   FunctionName:
     Value: !Ref ApiFunction
+  PreSignUpFunctionName:
+    Value: !Ref PreSignUpFunction
   TableName:
     Value: !Ref WorkoutsTable

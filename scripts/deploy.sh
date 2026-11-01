@@ -9,13 +9,16 @@
 # scripts/deploy-certificate.sh), HOSTED_ZONE_ID (only for Route 53 DNS).
 # Unset ones keep the stack's current value, so a plain redeploy never
 # drops the domain.
+# Invite code: asked for (hidden) on the first crew deploy, or when
+# ROTATE_INVITE=1. INVITE_CODE=... also works. It is never printed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export AWS_REGION="${AWS_REGION:-eu-west-2}"
 STACK_NAME="${STACK_NAME:-workout-tracker}"
 
-run() { printf '+ %s\n' "$*"; "$@"; }
+# Prints the command with any InviteCode value masked, then runs it.
+run() { printf '+ %s\n' "$*" | sed -E 's/InviteCode=[^ ]+/InviteCode=****/g'; "$@"; }
 step() { printf '\n== %s\n' "$*"; }
 output() {
   aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
@@ -35,6 +38,13 @@ PARAMS=()
 [[ -n "${DOMAIN_NAME+x}" ]] && PARAMS+=("DomainName=$DOMAIN_NAME")
 [[ -n "${CERTIFICATE_ARN+x}" ]] && PARAMS+=("CertificateArn=$CERTIFICATE_ARN")
 [[ -n "${HOSTED_ZONE_ID+x}" ]] && PARAMS+=("HostedZoneId=$HOSTED_ZONE_ID")
+echo "+ aws cloudformation describe-stacks --stack-name $STACK_NAME (is an invite code already set?)"
+HAS_INVITE="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+  --query "Stacks[0].Parameters[?ParameterKey=='InviteCode'] | length(@)" --output text 2>/dev/null || echo 0)"
+if [[ -z "${INVITE_CODE:-}" && ( "$HAS_INVITE" != "1" || -n "${ROTATE_INVITE:-}" ) ]]; then
+  read -rs -p "Crew invite code (12+ characters, hidden): " INVITE_CODE; echo
+fi
+[[ -n "${INVITE_CODE:-}" ]] && PARAMS+=("InviteCode=$INVITE_CODE")
 run aws cloudformation deploy \
   --stack-name "$STACK_NAME" \
   --template-file infra/template.yaml \
@@ -54,6 +64,7 @@ HOSTED_UI_DOMAIN="$(output HostedUiDomain)"
 BUCKET="$(output SiteBucketName)"
 DISTRIBUTION_ID="$(output DistributionId)"
 FUNCTION_NAME="$(output FunctionName)"
+PRESIGNUP_FUNCTION="$(output PreSignUpFunctionName)"
 
 step "5/7 Upload Lambda code"
 BUILD_DIR="$(mktemp -d)"
@@ -62,6 +73,10 @@ run zip -j -q "$BUILD_DIR/lambda.zip" backend/handler.py
 run aws lambda update-function-code --function-name "$FUNCTION_NAME" \
   --zip-file "fileb://$BUILD_DIR/lambda.zip" --query LastUpdateStatus --output text
 run aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+run zip -j -q "$BUILD_DIR/presignup.zip" backend/presignup.py
+run aws lambda update-function-code --function-name "$PRESIGNUP_FUNCTION" \
+  --zip-file "fileb://$BUILD_DIR/presignup.zip" --query LastUpdateStatus --output text
+run aws lambda wait function-updated --function-name "$PRESIGNUP_FUNCTION"
 
 step "6/7 Write frontend/config.js"
 echo "+ write frontend/config.js"
