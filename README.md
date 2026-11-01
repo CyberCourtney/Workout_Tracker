@@ -50,9 +50,11 @@ Validation: dates must be real `YYYY-MM-DD` dates, status must be `planned` or `
 ```
 infra/template.yaml        CloudFormation for every resource
 backend/handler.py         Lambda function
+backend/presignup.py       Cognito Pre sign-up trigger (invite code check)
 backend/test_handler.py    Unit tests (unittest + unittest.mock)
+backend/test_crew.py       Crew tests: isolation, privacy, invite code, goal/challenge maths
 infra/certificate.yaml     ACM certificate for the custom domain (us-east-1)
-frontend/                  index.html, styles.css, app.js, share.js, config.js (generated), manifest + icons
+frontend/                  index.html, styles.css, app.js, crew.js, share.js, config.js (generated), manifest + icons
 scripts/deploy.sh          Validates, deploys, uploads code and site; echoes every command
 scripts/deploy-certificate.sh  Creates the us-east-1 certificate and prints its DNS validation record
 tests/share-render.html    Browser test for the share image
@@ -90,7 +92,10 @@ Prerequisites: AWS CLI v2 signed in to the account you want to use, and `zip`.
 4. `aws cloudformation describe-stacks` to read the outputs (site URL, API URL, user pool ID, client ID, Hosted UI domain, bucket, distribution, function).
 5. Zip `backend/handler.py` and `aws lambda update-function-code`, then `aws lambda wait function-updated`.
 6. Write the outputs into `frontend/config.js`.
+   It also uploads `backend/presignup.py` to the Pre sign-up Lambda the same way.
 7. `aws s3 sync frontend/ s3://<bucket>/ --delete`, `aws s3 cp` for `manifest.webmanifest` (sets its content type), then `aws cloudfront create-invalidation --paths "/*"`.
+
+The deploy step reads the stack's current parameters first (`describe-stacks`) and asks for the crew invite code if none is set yet. It's masked as `InviteCode=****` in the printed commands.
 
 ```bash
 aws sso login --profile <your-profile>        # only if your profile uses SSO
@@ -119,9 +124,30 @@ Deploy order:
 
 Later plain `./scripts/deploy.sh` runs keep the domain: parameters you don't set keep the stack's current values.
 
-## Create your login
+## Crew (friends training together)
 
-Self sign-up is disabled, so create your own user once after the first deploy. Use the `UserPoolId` printed at the end of the deploy:
+Up to ~15 friends share one crew: personal goals the crew can follow, friendly challenges measured against each person's own starting point, cheers, and a **Me | Crew** toggle on the Progress chart. Design and privacy rules: [`docs/SOCIAL_DESIGN.md`](docs/SOCIAL_DESIGN.md). In short, friends only ever see display names, colours, chart numbers, goal progress and challenge results. Never workouts or sets. Anyone can turn off **Share my progress with the crew** in Settings.
+
+### Invite code: set or rotate
+
+Sign-up is invite-only. The code is a `NoEcho` CloudFormation parameter (`InviteCode`, 12+ characters), so it never appears in source, outputs or the deploy log.
+
+- **First crew deploy:** `scripts/deploy.sh` asks for it (hidden input).
+- **Rotate:** `ROTATE_INVITE=1 AWS_PROFILE=<your-profile> ./scripts/deploy.sh` and type the new code. Existing accounts are unaffected; only new sign-ups need the new code.
+- Pick something long and random (e.g. `python3 -c "import secrets; print(secrets.token_urlsafe(12))"`) and share it privately.
+
+### How a friend joins
+
+1. Send them the site link and the invite code.
+2. On the landing page they tap **Have an invite?**, enter email, a password (12+ characters, upper and lower case, a number) and the invite code.
+3. Cognito emails a 6-digit code; they enter it to confirm their email.
+4. They tap **Sign in**, log in, and choose a display name. They get the first free crew colour and a marker shape, and can change the colour in Settings.
+
+Sign-ups without the right code are rejected by the Pre sign-up Lambda (`backend/presignup.py`), including attempts through Cognito's own sign-up page.
+
+## Create your login (admin)
+
+Admin-created accounts (like the first one) don't need the invite code. To create one yourself, use the `UserPoolId` printed at the end of the deploy:
 
 ```bash
 aws cognito-idp admin-create-user \
