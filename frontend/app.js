@@ -130,7 +130,9 @@ async function exchangeCode(code, state) {
   storeTokens(await tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: redirectUri(), code_verifier: saved.verifier }));
 }
 
-async function accessToken() {
+// interactive=false returns null instead of redirecting, so boot can show
+// the landing page when there's no session.
+async function accessToken(interactive = true) {
   const auth = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null');
   if (auth && auth.expiresAt - Date.now() > 60_000) return auth.access;
   if (auth && auth.refresh) {
@@ -138,7 +140,7 @@ async function accessToken() {
     catch { /* fall through to a fresh login */ }
   }
   sessionStorage.removeItem(AUTH_KEY);
-  return login();
+  return interactive ? login() : null;
 }
 
 function signOut() {
@@ -215,6 +217,7 @@ function draftFromWorkout(w, mode) {
 let currentView = 'calendar';
 function show(view) {
   currentView = view;
+  document.body.dataset.view = view; // drives the feature colour in CSS
   for (const v of ['calendar', 'workout', 'progress']) $(`#view-${v}`).hidden = v !== view;
   $$('.tabbar button').forEach(b => {
     b.classList.toggle('on', b.dataset.view === view);
@@ -241,9 +244,31 @@ $('#start-btn').addEventListener('click', startWorkout);
 $('#wk-start-empty').addEventListener('click', startWorkout);
 
 let toastTimer;
-function toast(msg, ms = 2200) {
+
+// Confetti burst on Finish: palette-coloured pieces flying out from the
+// middle for 400ms. Skipped entirely under prefers-reduced-motion.
+function celebrate() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const colours = ['#FF6B6B', '#FFB547', '#B8F23A', '#2EC5FF', '#6C5CE7'];
+  const burst = Object.assign(document.createElement('div'), { className: 'burst' });
+  burst.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2 + Math.random() * 0.3, d = 120 + Math.random() * 140;
+    const piece = document.createElement('i');
+    piece.style.background = colours[i % colours.length];
+    piece.style.setProperty('--x', `${Math.cos(a) * d}px`);
+    piece.style.setProperty('--y', `${Math.sin(a) * d}px`);
+    piece.style.setProperty('--r', `${Math.round(Math.random() * 540 - 270)}deg`);
+    burst.append(piece);
+  }
+  // Inside the open sheet (top layer) if there is one, so it shows above it.
+  (document.querySelector('dialog[open]') || document.body).append(burst);
+  setTimeout(() => burst.remove(), 600);
+}
+function toast(msg, ms = 2200, kind = '') {
   const t = $('#toast');
   t.textContent = msg;
+  t.className = `toast ${kind}`.trim();
   t.hidden = false;
   // As a popover the toast sits above open sheets (top layer) where supported.
   if (t.showPopover) { try { t.hidePopover(); } catch {} t.showPopover(); }
@@ -641,6 +666,7 @@ $('#wk-finish').addEventListener('click', async () => {
     show('calendar');
     if (planned) { toast('Workout planned'); return; }
     openDetail(saved, 'Workout saved'); // has the Share button
+    celebrate();
     const prs = findPRs(saved, history);
     if (prs.size) {
       const unit = getUnit();
@@ -648,7 +674,7 @@ $('#wk-finish').addEventListener('click', async () => {
         const e = saved.exercises[i], s = e.sets[p.set];
         return `${e.name} ${fmt(kgTo(s.weight, unit))} ${unit} × ${fmt(s.reps)}`;
       });
-      toast(`🏆 New PR${prs.size > 1 ? 's' : ''}! ${lines.join(' · ')}`, 4500);
+      toast(`🏆 New PR${prs.size > 1 ? 's' : ''}! ${lines.join(' · ')}`, 4500, 'pr');
     } else {
       toast('Workout saved');
     }
@@ -759,6 +785,9 @@ function drawChart(points, unit) {
   const bAnchor = bx > W - 70 ? 'end' : bx < M.l + 50 ? 'start' : 'middle';
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${points.length} workout dates. Latest ${fmt(vals[vals.length - 1])} ${unit}, best ${fmt(hi)} ${unit}.">
+    <defs><linearGradient id="lime-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--lime); stop-opacity: .45"/><stop offset="1" style="stop-color: var(--lime); stop-opacity: 0"/>
+    </linearGradient></defs>
     ${yt.map(v => `<line class="grid" x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}"/>`).join('')}
     ${yt.map(v => `<text class="axis" x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmt(v)}</text>`).join('')}
     ${xt.map((t, i) => `<text class="axis" x="${X(t)}" y="${H - 6}" text-anchor="${xAnchor(i)}">${xLabel(t)}</text>`).join('')}
@@ -799,7 +828,14 @@ window.addEventListener('resize', () => {
 // ------------------------------------------------------------ settings
 function renderSettings() {
   $$('#unit-toggle button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.unit === getUnit())));
+  const theme = document.documentElement.dataset.theme;
+  $$('#theme-toggle button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeChoice === theme)));
 }
+$$('#theme-toggle button').forEach(b => b.addEventListener('click', () => {
+  document.documentElement.dataset.theme = b.dataset.themeChoice;
+  localStorage.setItem('wt.theme', b.dataset.themeChoice);
+  renderSettings();
+}));
 $$('[data-open-settings]').forEach(b => b.addEventListener('click', () => { renderSettings(); $('#settings').showModal(); }));
 $$('#unit-toggle button').forEach(b => b.addEventListener('click', () => {
   const unit = b.dataset.unit;
@@ -817,20 +853,44 @@ $$('#unit-toggle button').forEach(b => b.addEventListener('click', () => {
 $('#sign-out').addEventListener('click', signOut);
 
 // ------------------------------------------------------------ boot
-async function boot() {
-  const msg = $('#boot-msg');
-  if (!CFG.apiUrl || !CFG.clientId || !CFG.hostedUiDomain) {
-    msg.textContent = 'This site is not configured yet. Run scripts/deploy.sh to generate config.js.';
+// ------------------------------------------------------------ landing page
+function showLanding() {
+  $('#boot').hidden = true;
+  $('#app').hidden = true;
+  $('#landing').hidden = false;
+  $('#lp-year').textContent = new Date().getFullYear();
+  const items = $$('#landing .reveal');
+  if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    items.forEach(el => el.classList.add('in'));
     return;
   }
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }, { threshold: 0.15 });
+  items.forEach(el => io.observe(el));
+}
+$$('[data-sign-in]').forEach(b => b.addEventListener('click', () => {
+  if (!CFG.clientId || !CFG.hostedUiDomain) { toast('Sign-in isn\u2019t configured on this copy of the site.'); return; }
+  login();
+}));
+
+// ------------------------------------------------------------ boot
+async function boot() {
+  const msg = $('#boot-msg');
   const q = new URLSearchParams(location.search);
+  if (!CFG.apiUrl || !CFG.clientId || !CFG.hostedUiDomain) {
+    // Not deployed yet (e.g. opened from disk): still show the landing page.
+    showLanding();
+    return;
+  }
   try {
     if (q.get('error')) throw new Error(q.get('error_description') || 'Sign-in failed.');
     if (q.get('code')) {
       await exchangeCode(q.get('code'), q.get('state'));
       history.replaceState(null, '', '/');
     }
-    await accessToken(); // redirects to the Hosted UI when there is no session
+    // No session: show the landing page; its Sign in buttons start the Hosted UI.
+    if (!(await accessToken(false))) { showLanding(); return; }
   } catch (e) {
     history.replaceState(null, '', '/');
     msg.innerHTML = '';
