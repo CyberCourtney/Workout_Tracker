@@ -5,5 +5,6 @@ window.APP_CONFIG = {
   region: "",
   userPoolId: "",
   clientId: "",
-  hostedUiDomain: ""
+  hostedUiDomain: "",
+  siteDomain: ""
 };

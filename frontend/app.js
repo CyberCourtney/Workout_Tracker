@@ -30,6 +30,46 @@ const toKg = (v, unit) => (unit === 'lb' ? v * KG_PER_LB : v);
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
 const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
+// ------------------------------------------------------------ personal records
+// Computed on the client from completed workouts; nothing extra is stored.
+const epley = s => (s.reps > 0 ? (s.reps === 1 ? s.weight : s.weight * (1 + s.reps / 30)) : 0);
+const isBefore = (a, b) => a.date < b.date || (a.date === b.date && (a.updatedAt || '') < (b.updatedAt || '￿'));
+
+// Returns Map(exerciseIndex -> { set, kinds }) for sets in `workout` that beat
+// every earlier completed workout's best estimated 1RM or top weight. An
+// exercise done for the first time has nothing to beat, so it is not a PR.
+function findPRs(workout, history) {
+  const best = new Map();
+  for (const w of history) {
+    if (w.status !== 'completed' || w.id === workout.id || !isBefore(w, workout)) continue;
+    for (const e of w.exercises) {
+      const k = norm(e.name);
+      const b = best.get(k) || { e1rm: 0, top: 0 };
+      for (const s of e.sets) {
+        if (s.reps <= 0) continue;
+        b.e1rm = Math.max(b.e1rm, epley(s));
+        b.top = Math.max(b.top, s.weight);
+      }
+      best.set(k, b);
+    }
+  }
+  const prs = new Map();
+  workout.exercises.forEach((e, i) => {
+    const b = best.get(norm(e.name));
+    if (!b) return;
+    let pick = null;
+    e.sets.forEach((s, j) => {
+      if (s.reps <= 0) return;
+      const kinds = [];
+      if (epley(s) > b.e1rm + 1e-9) kinds.push('e1rm');
+      if (s.weight > b.top + 1e-9) kinds.push('top');
+      if (kinds.length && (!pick || epley(s) > epley(e.sets[pick.set]))) pick = { set: j, kinds };
+    });
+    if (pick) prs.set(i, pick);
+  });
+  return prs;
+}
+
 // ------------------------------------------------------------ auth
 // Tokens live in sessionStorage (cleared with the tab); localStorage is used
 // only for the workout draft and the unit setting.
@@ -90,7 +130,9 @@ async function exchangeCode(code, state) {
   storeTokens(await tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: redirectUri(), code_verifier: saved.verifier }));
 }
 
-async function accessToken() {
+// interactive=false returns null instead of redirecting, so boot can show
+// the landing page when there's no session.
+async function accessToken(interactive = true) {
   const auth = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null');
   if (auth && auth.expiresAt - Date.now() > 60_000) return auth.access;
   if (auth && auth.refresh) {
@@ -98,7 +140,7 @@ async function accessToken() {
     catch { /* fall through to a fresh login */ }
   }
   sessionStorage.removeItem(AUTH_KEY);
-  return login();
+  return interactive ? login() : null;
 }
 
 function signOut() {
@@ -175,7 +217,8 @@ function draftFromWorkout(w, mode) {
 let currentView = 'calendar';
 function show(view) {
   currentView = view;
-  for (const v of ['calendar', 'workout', 'progress']) $(`#view-${v}`).hidden = v !== view;
+  document.body.dataset.view = view; // drives the feature colour in CSS
+  for (const v of ['calendar', 'workout', 'progress', 'crew']) $(`#view-${v}`).hidden = v !== view;
   $$('.tabbar button').forEach(b => {
     b.classList.toggle('on', b.dataset.view === view);
     b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false');
@@ -185,6 +228,7 @@ function show(view) {
   if (view === 'calendar') renderCalendar();
   if (view === 'workout') renderWorkout();
   if (view === 'progress') renderProgress();
+  if (view === 'crew') Crew.render();
 }
 function updateFab() {
   const fab = $('#start-btn');
@@ -201,12 +245,39 @@ $('#start-btn').addEventListener('click', startWorkout);
 $('#wk-start-empty').addEventListener('click', startWorkout);
 
 let toastTimer;
-function toast(msg) {
+
+// Confetti burst on Finish: palette-coloured pieces flying out from the
+// middle for 400ms. Skipped entirely under prefers-reduced-motion.
+function celebrate() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const colours = ['#FF6B6B', '#FFB547', '#B8F23A', '#2EC5FF', '#6C5CE7'];
+  const burst = Object.assign(document.createElement('div'), { className: 'burst' });
+  burst.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2 + Math.random() * 0.3, d = 120 + Math.random() * 140;
+    const piece = document.createElement('i');
+    piece.style.background = colours[i % colours.length];
+    piece.style.setProperty('--x', `${Math.cos(a) * d}px`);
+    piece.style.setProperty('--y', `${Math.sin(a) * d}px`);
+    piece.style.setProperty('--r', `${Math.round(Math.random() * 540 - 270)}deg`);
+    burst.append(piece);
+  }
+  // Inside the open sheet (top layer) if there is one, so it shows above it.
+  (document.querySelector('dialog[open]') || document.body).append(burst);
+  setTimeout(() => burst.remove(), 600);
+}
+function toast(msg, ms = 2200, kind = '') {
   const t = $('#toast');
   t.textContent = msg;
+  t.className = `toast ${kind}`.trim();
   t.hidden = false;
+  // As a popover the toast sits above open sheets (top layer) where supported.
+  if (t.showPopover) { try { t.hidePopover(); } catch {} t.showPopover(); }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+  toastTimer = setTimeout(() => {
+    t.hidden = true;
+    if (t.hidePopover) { try { t.hidePopover(); } catch {} }
+  }, ms);
 }
 
 // ------------------------------------------------------------ calendar
@@ -268,6 +339,7 @@ function renderDayList() {
   ul.innerHTML = '';
   items.forEach((w, i) => {
     const li = document.createElement('li');
+    li.className = 'workout-item';
     const b = document.createElement('button');
     b.className = 'card workout-card';
     const planned = w.status === 'planned';
@@ -277,6 +349,12 @@ function renderDayList() {
       <p class="ex">${esc(summary(w))}</p><p class="ex">${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'} · ${sets} set${sets === 1 ? '' : 's'}</p>`;
     b.addEventListener('click', () => openDetail(w));
     li.append(b);
+    if (!planned) {
+      const share = Object.assign(document.createElement('button'), { className: 'card-share', textContent: 'Share' });
+      share.setAttribute('aria-label', `Share workout from ${shortDate(w.date)}`);
+      share.addEventListener('click', () => openShare(w));
+      li.append(share);
+    }
     ul.append(li);
   });
   $('#day-empty').hidden = items.length > 0 || !monthCache.has(selectedDay.slice(0, 7));
@@ -300,17 +378,77 @@ $('#day-add').addEventListener('click', () => {
 const detail = $('#detail');
 let detailWorkout = null;
 
-function openDetail(w) {
+function openDetail(w, title) {
   detailWorkout = w;
   const unit = getUnit();
-  $('#detail-title').textContent = `${w.status === 'planned' ? 'Planned · ' : ''}${shortDate(w.date)}`;
+  $('#detail-title').textContent = title || `${w.status === 'planned' ? 'Planned · ' : ''}${shortDate(w.date)}`;
   $('#detail-body').innerHTML = w.exercises.map(e => `
     <div class="card detail-ex"><h3>${esc(e.name)}</h3>
       <table>${e.sets.map((s, i) => `<tr><td>Set ${i + 1}</td><td>${fmt(s.reps)} reps</td><td>${fmt(kgTo(s.weight, unit))} ${unit}</td></tr>`).join('') || '<tr><td colspan="3">No sets</td></tr>'}</table>
     </div>`).join('');
   $('#detail-start').hidden = w.status !== 'planned';
-  detail.showModal();
+  $('#detail-share').hidden = w.status !== 'completed';
+  $('#detail-repeat').hidden = w.status !== 'completed';
+  if (!detail.open) detail.showModal();
 }
+
+$('#detail-share').addEventListener('click', () => openShare(detailWorkout));
+$('#detail-repeat').addEventListener('click', () => {
+  if (!confirmReplaceDraft()) return;
+  // Copies exercises and set count; last time's numbers show as placeholders
+  // so nothing counts as done until it's typed in.
+  const unit = getUnit();
+  draft = {
+    id: null, mode: 'new', date: today(), status: 'completed', unit,
+    exercises: detailWorkout.exercises.map(e => ({
+      name: e.name,
+      sets: (e.sets.length ? e.sets : [{}]).map(s => ({
+        reps: '', weight: '',
+        hint: s.reps != null ? { reps: String(s.reps), weight: String(Math.round(kgTo(s.weight, unit) * 10) / 10) } : null,
+      })),
+    })),
+  };
+  persistDraft();
+  detail.close();
+  show('workout');
+});
+
+// ------------------------------------------------------------ share image
+const shareSheet = $('#share');
+let shareFile = null;
+
+async function openShare(w) {
+  let history = [];
+  try { history = await loadAll(); } catch { /* share without PR badges */ }
+  const prs = new Map([...findPRs(w, history)].map(([i, p]) => [i, p.set]));
+  const { canvas } = WorkoutShare.render(w, { unit: getUnit(), prs, domain: CFG.siteDomain || location.host });
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  shareFile = new File([blob], `workout-${w.date}.png`, { type: 'image/png' });
+  const img = $('#share-preview');
+  if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(blob);
+  if (detail.open) detail.close();
+  shareSheet.showModal();
+}
+
+function saveShareFile() {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(shareFile), download: shareFile.name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+$('#share-go').addEventListener('click', async () => {
+  if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+    try { await navigator.share({ files: [shareFile] }); }
+    catch (e) { if (e.name !== 'AbortError') toast('Could not open sharing. Try Save instead.'); }
+  } else {
+    saveShareFile();
+    toast('Sharing isn’t available here, so the image was saved instead');
+  }
+});
+$('#share-save').addEventListener('click', saveShareFile);
 $$('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 $$('dialog.sheet').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
 
@@ -351,7 +489,26 @@ async function refreshNameSuggestions() {
     }
     $('#exercise-names').innerHTML = [...counts.values()].sort((a, b) => b.n - a.n)
       .map(c => `<option value="${esc(c.name)}"></option>`).join('');
+    // history just arrived: fill in "last time" hints for names already typed
+    if (draft) $$('.exercise').forEach((li, i) => {
+      if (draft.exercises[i]) $('.last-time', li).textContent = lastTimeText(draft.exercises[i].name);
+    });
   } catch { /* suggestions are optional */ }
+}
+
+// "Last time: 12 Oct · 5 × 60 kg, 5 × 62.5 kg" from the most recent earlier
+// completed workout containing this exercise.
+function lastTimeText(name) {
+  const k = norm(name || '');
+  if (!k || !allWorkouts || !draft) return '';
+  const unit = getUnit();
+  const prev = allWorkouts
+    .filter(w => w.status === 'completed' && w.id !== draft.id && w.date <= draft.date && w.exercises.some(e => norm(e.name) === k))
+    .sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')))[0];
+  if (!prev) return '';
+  const sets = prev.exercises.filter(e => norm(e.name) === k).flatMap(e => e.sets);
+  const when = parseDate(prev.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return `Last time (${when}): ${sets.map(s => `${fmt(s.reps)} × ${fmt(kgTo(s.weight, unit))} ${unit}`).join(', ') || 'no sets'}`;
 }
 
 function renderWorkout() {
@@ -385,12 +542,21 @@ function drawExercises() {
         <button class="icon-btn small" data-act="remove" aria-label="Delete exercise">
           <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       </div>
+      <p class="last-time" aria-live="polite"></p>
       <div class="set-grid set-labels"><span>Set</span><span>Reps</span><span>${draft.unit}</span><span></span></div>
       <div class="sets"></div>
       <button class="add-set">+ Add Set</button>`;
     const name = $('.ex-name', li);
     name.value = ex.name;
-    name.addEventListener('input', () => { ex.name = name.value; persistDraft(); });
+    const hint = $('.last-time', li);
+    hint.textContent = lastTimeText(ex.name);
+    let hintTimer;
+    name.addEventListener('input', () => {
+      ex.name = name.value;
+      persistDraft();
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { hint.textContent = lastTimeText(ex.name); }, 250);
+    });
 
     const setsEl = $('.sets', li);
     ex.sets.forEach((s, j) => {
@@ -402,6 +568,7 @@ function drawExercises() {
         <button class="icon-btn small" aria-label="Delete set ${j + 1}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
       const reps = $('.reps', row), weight = $('.weight', row);
       reps.value = s.reps; weight.value = s.weight;
+      if (s.hint) { reps.placeholder = s.hint.reps; weight.placeholder = s.hint.weight; }
       reps.addEventListener('input', () => { s.reps = reps.value; reps.removeAttribute('aria-invalid'); persistDraft(); });
       weight.addEventListener('input', () => { s.weight = weight.value; weight.removeAttribute('aria-invalid'); persistDraft(); });
       $('button', row).addEventListener('click', () => { ex.sets.splice(j, 1); persistDraft(); drawExercises(); });
@@ -486,16 +653,33 @@ $('#wk-finish').addEventListener('click', async () => {
   const btn = $('#wk-finish');
   btn.disabled = true;
   try {
-    if (draft.id) await api('PUT', `/workouts/${encodeURIComponent(draft.id)}`, payload);
-    else await api('POST', '/workouts', payload);
+    let history = [];
+    try { history = await loadAll(); } catch { /* PRs are a bonus; still save */ }
+    const saved = draft.id
+      ? await api('PUT', `/workouts/${encodeURIComponent(draft.id)}`, payload)
+      : await api('POST', '/workouts', payload);
     const planned = payload.status === 'planned';
     draft = null;
     persistDraft();
     invalidate();
-    toast(planned ? 'Workout planned' : 'Workout saved');
     selectedDay = payload.date;
     calMonth = payload.date.slice(0, 7);
     show('calendar');
+    if (planned) { toast('Workout planned'); return; }
+    openDetail(saved, 'Workout saved'); // has the Share button
+    celebrate();
+    Crew.checkGoals();
+    const prs = findPRs(saved, history);
+    if (prs.size) {
+      const unit = getUnit();
+      const lines = [...prs].map(([i, p]) => {
+        const e = saved.exercises[i], s = e.sets[p.set];
+        return `${e.name} ${fmt(kgTo(s.weight, unit))} ${unit} × ${fmt(s.reps)}`;
+      });
+      toast(`🏆 New PR${prs.size > 1 ? 's' : ''}! ${lines.join(' · ')}`, 4500, 'pr');
+    } else {
+      toast('Workout saved');
+    }
   } catch (e) {
     err.textContent = e.message; // the draft is still saved locally
     err.hidden = false;
@@ -506,6 +690,8 @@ $('#wk-finish').addEventListener('click', async () => {
 
 // ------------------------------------------------------------ progress
 let metric = 'e1rm';
+let crewMetric = 'pct'; // Crew mode defaults to % change from start (fair across strength levels)
+let progMode = 'me';
 const METRICS = {
   e1rm: { label: 'Estimated 1RM', caption: 'Best estimated one-rep max (Epley)', agg: 'max',
     of: w => Math.max(0, ...w.sets.map(s => (s.reps > 0 ? (s.reps === 1 ? s.weight : s.weight * (1 + s.reps / 30)) : 0))) },
@@ -516,7 +702,11 @@ const METRICS = {
 };
 
 async function renderProgress() {
-  $$('#prog-metric button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.metric === metric)));
+  const crewMode = progMode === 'crew';
+  $$('#prog-mode button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.mode === progMode)));
+  $('#prog-metric [data-metric="pct"]').hidden = !crewMode;
+  $('#crew-chips').hidden = !crewMode;
+  $$('#prog-metric button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.metric === (crewMode ? crewMetric : metric))));
   let workouts;
   try { workouts = (await loadAll()).filter(w => w.status === 'completed'); }
   catch (e) { toast(e.message); return; }
@@ -529,6 +719,12 @@ async function renderProgress() {
     c.n++;
     names.set(k, c);
   }
+  if (crewMode) {
+    $('#prog-empty').hidden = true;
+    $('#prog-content').hidden = false;
+    return Crew.renderChart(names, crewMetric);
+  }
+  Crew.leaveCrewMode();
   $('#prog-empty').hidden = names.size > 0;
   $('#prog-content').hidden = names.size === 0;
   if (!names.size) return;
@@ -555,7 +751,11 @@ async function renderProgress() {
   drawChart(points, unit);
 }
 $('#prog-exercise').addEventListener('change', renderProgress);
-$$('#prog-metric button').forEach(b => b.addEventListener('click', () => { metric = b.dataset.metric; renderProgress(); }));
+$$('#prog-metric button').forEach(b => b.addEventListener('click', () => {
+  if (progMode === 'crew') crewMetric = b.dataset.metric; else metric = b.dataset.metric;
+  renderProgress();
+}));
+$$('#prog-mode button').forEach(b => b.addEventListener('click', () => { progMode = b.dataset.mode; renderProgress(); }));
 
 function niceTicks(lo, hi, count = 4) {
   if (lo === hi) { lo = Math.max(0, lo - 1); hi += 1; }
@@ -603,6 +803,9 @@ function drawChart(points, unit) {
   const bAnchor = bx > W - 70 ? 'end' : bx < M.l + 50 ? 'start' : 'middle';
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${points.length} workout dates. Latest ${fmt(vals[vals.length - 1])} ${unit}, best ${fmt(hi)} ${unit}.">
+    <defs><linearGradient id="lime-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--lime); stop-opacity: .45"/><stop offset="1" style="stop-color: var(--lime); stop-opacity: 0"/>
+    </linearGradient></defs>
     ${yt.map(v => `<line class="grid" x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}"/>`).join('')}
     ${yt.map(v => `<text class="axis" x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmt(v)}</text>`).join('')}
     ${xt.map((t, i) => `<text class="axis" x="${X(t)}" y="${H - 6}" text-anchor="${xAnchor(i)}">${xLabel(t)}</text>`).join('')}
@@ -642,8 +845,16 @@ window.addEventListener('resize', () => {
 
 // ------------------------------------------------------------ settings
 function renderSettings() {
+  Crew.renderSettings();
   $$('#unit-toggle button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.unit === getUnit())));
+  const theme = document.documentElement.dataset.theme;
+  $$('#theme-toggle button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeChoice === theme)));
 }
+$$('#theme-toggle button').forEach(b => b.addEventListener('click', () => {
+  document.documentElement.dataset.theme = b.dataset.themeChoice;
+  localStorage.setItem('wt.theme', b.dataset.themeChoice);
+  renderSettings();
+}));
 $$('[data-open-settings]').forEach(b => b.addEventListener('click', () => { renderSettings(); $('#settings').showModal(); }));
 $$('#unit-toggle button').forEach(b => b.addEventListener('click', () => {
   const unit = b.dataset.unit;
@@ -661,20 +872,44 @@ $$('#unit-toggle button').forEach(b => b.addEventListener('click', () => {
 $('#sign-out').addEventListener('click', signOut);
 
 // ------------------------------------------------------------ boot
-async function boot() {
-  const msg = $('#boot-msg');
-  if (!CFG.apiUrl || !CFG.clientId || !CFG.hostedUiDomain) {
-    msg.textContent = 'This site is not configured yet. Run scripts/deploy.sh to generate config.js.';
+// ------------------------------------------------------------ landing page
+function showLanding() {
+  $('#boot').hidden = true;
+  $('#app').hidden = true;
+  $('#landing').hidden = false;
+  $('#lp-year').textContent = new Date().getFullYear();
+  const items = $$('#landing .reveal');
+  if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    items.forEach(el => el.classList.add('in'));
     return;
   }
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }, { threshold: 0.15 });
+  items.forEach(el => io.observe(el));
+}
+$$('[data-sign-in]').forEach(b => b.addEventListener('click', () => {
+  if (!CFG.clientId || !CFG.hostedUiDomain) { toast('Sign-in isn\u2019t configured on this copy of the site.'); return; }
+  login();
+}));
+
+// ------------------------------------------------------------ boot
+async function boot() {
+  const msg = $('#boot-msg');
   const q = new URLSearchParams(location.search);
+  if (!CFG.apiUrl || !CFG.clientId || !CFG.hostedUiDomain) {
+    // Not deployed yet (e.g. opened from disk): still show the landing page.
+    showLanding();
+    return;
+  }
   try {
     if (q.get('error')) throw new Error(q.get('error_description') || 'Sign-in failed.');
     if (q.get('code')) {
       await exchangeCode(q.get('code'), q.get('state'));
       history.replaceState(null, '', '/');
     }
-    await accessToken(); // redirects to the Hosted UI when there is no session
+    // No session: show the landing page; its Sign in buttons start the Hosted UI.
+    if (!(await accessToken(false))) { showLanding(); return; }
   } catch (e) {
     history.replaceState(null, '', '/');
     msg.innerHTML = '';
@@ -687,5 +922,7 @@ async function boot() {
   $('#boot').hidden = true;
   $('#app').hidden = false;
   show(draft ? 'workout' : 'calendar');
+  Crew.onSignedIn();
 }
-boot();
+// crew.js loads after this file and registers `Crew`; start once both have run.
+window.addEventListener('DOMContentLoaded', boot);

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Share image test</title>
+  <style>
+    body { font: 15px -apple-system, BlinkMacSystemFont, sans-serif; margin: 24px; background: #f2f2f7; color: #000; }
+    .case { display: inline-block; vertical-align: top; margin: 0 24px 24px 0; }
+    canvas { width: 324px; height: 405px; border-radius: 12px; display: block; }
+    .pass { color: #1a7f37; font-weight: 600; } .fail { color: #c4332b; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Share image render test</h1>
+  <p>Open via any static server from the repo root, e.g. <code>python3 -m http.server</code> then <code>/tests/share-render.html</code>.
+     Each case must be exactly 1080×1350 with no text outside its box or over the footer.</p>
+  <div id="out"></div>
+  <script src="../frontend/share.js"></script>
+  <script>
+    // A workout shaped exactly like items created before this change
+    // (id, date, status, exercises[{name, sets[{reps, weight}]}], updatedAt).
+    const short = {
+      id: 'old-1', date: '2026-11-01', status: 'completed', updatedAt: '2026-11-01T09:00:00+00:00',
+      exercises: [
+        { name: 'Bench press', sets: [{ reps: 8, weight: 60 }, { reps: 8, weight: 60 }, { reps: 6, weight: 65 }] },
+        { name: 'Barbell row', sets: [{ reps: 10, weight: 50 }, { reps: 10, weight: 50 }] },
+        { name: 'Plank', sets: [{ reps: 1, weight: 0 }] },
+      ],
+    };
+    const names = ['Back squat', 'Romanian deadlift with a very long descriptive exercise name that needs wrapping onto two lines',
+      'Leg press', 'Walking lunges', 'Calf raise', 'Overhead press', 'Lateral raise', 'Pull-ups', 'Bicep curl', 'Tricep pushdown'];
+    const long = {
+      id: 'long-1', date: '2026-10-31', status: 'completed', updatedAt: '2026-10-31T09:00:00+00:00',
+      exercises: Array.from({ length: 30 }, (_, i) => ({
+        name: `${names[i % names.length]}${i >= names.length ? ` ${Math.floor(i / names.length) + 1}` : ''}`,
+        sets: Array.from({ length: 3 }, (_, j) => ({ reps: 12 - j * 2, weight: 40 + i * 2.5 + j * 5 })),
+      })),
+    };
+    // Worst case the API allows: 30 exercises x 20 sets.
+    const max = { ...long, id: 'max-1', exercises: long.exercises.map(e => ({
+      ...e, sets: Array.from({ length: 20 }, (_, j) => ({ reps: 12 - (j % 5), weight: 102.5 + j * 2.5 })) })) };
+    const cases = [
+      ['short', short, { unit: 'kg', prs: new Map([[0, 2]]), domain: 'workout.example.com' }],
+      ['long-30-exercises', long, { unit: 'kg', prs: new Map([[0, 2]]), domain: 'workout.example.com' }],
+      ['max-30x20-sets', max, { unit: 'kg', prs: new Map([[0, 19]]), domain: 'workout.example.com' }],
+      ['short-lb', short, { unit: 'lb', prs: new Map(), domain: 'workout.example.com' }],
+    ];
+    window.results = {};
+    const out = document.getElementById('out');
+    for (const [name, w, opts] of cases) {
+      const r = WorkoutShare.render(w, opts);
+      const problems = WorkoutShare.check(r);
+      const sizeOk = r.canvas.width === 1080 && r.canvas.height === 1350;
+      const ok = sizeOk && problems.length === 0;
+      window.results[name] = { ok, width: r.canvas.width, height: r.canvas.height, scale: r.scale,
+        shown: r.shown, total: w.exercises.length, problems, canvas: r.canvas };
+      const div = document.createElement('div');
+      div.className = 'case';
+      div.append(r.canvas);
+      const p = document.createElement('p');
+      p.innerHTML = `<b>${name}</b>: <span class="${ok ? 'pass' : 'fail'}">${ok ? 'PASS' : 'FAIL'}</span><br>
+        ${r.canvas.width}×${r.canvas.height}, text scale ${r.scale}, showing ${r.shown}/${w.exercises.length} exercises
+        ${problems.length ? '<br>' + problems.join('<br>') : ''}`;
+      div.append(p);
+      out.append(div);
+    }
+    document.title = Object.values(window.results).every(r => r.ok) ? 'PASS' : 'FAIL';
+  </script>
+</body>
+</html>

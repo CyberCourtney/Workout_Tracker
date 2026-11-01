@@ -1,5 +1,6 @@
 """Unit tests for handler.py. Run from the backend/ folder: python -m unittest"""
 
+import copy
 import json
 import re
 import unittest
@@ -10,25 +11,35 @@ import handler
 
 
 class FakeTable:
-    """In-memory stand-in for a DynamoDB Table, supporting the two key
-    condition shapes handler.py uses."""
+    """In-memory stand-in for a DynamoDB Table, supporting the key condition
+    shapes and condition expressions handler.py uses."""
 
     def __init__(self):
         self.items = {}
         self.calls = []
 
-    def put_item(self, Item, ConditionExpression=None):
+    def get_item(self, Key):
+        self.calls.append(("get_item", Key["PK"]))
+        item = self.items.get((Key["PK"], Key["SK"]))
+        return {"Item": copy.deepcopy(item)} if item else {}
+
+    def put_item(self, Item, ConditionExpression=None, ExpressionAttributeNames=None):
         self.calls.append(("put_item", Item["PK"]))
         key = (Item["PK"], Item["SK"])
-        if ConditionExpression == "attribute_not_exists(PK)" and key in self.items:
+        existing = self.items.get(key)
+        if ConditionExpression == "attribute_not_exists(PK)" and existing is not None:
             raise RuntimeError("ConditionalCheckFailed")
-        self.items[key] = Item
+        if ConditionExpression == "attribute_not_exists(#r)" and existing is not None \
+                and ExpressionAttributeNames["#r"] in existing:
+            raise RuntimeError("ConditionalCheckFailed")
+        self.items[key] = copy.deepcopy(Item)
 
     def delete_item(self, Key):
         self.calls.append(("delete_item", Key["PK"]))
         self.items.pop((Key["PK"], Key["SK"]), None)
 
-    def query(self, KeyConditionExpression, ExpressionAttributeValues, ExclusiveStartKey=None):
+    def query(self, KeyConditionExpression, ExpressionAttributeValues, ExclusiveStartKey=None,
+              ScanIndexForward=True, Limit=None):
         v = ExpressionAttributeValues
         pk = v[":pk"]
         self.calls.append(("query", pk))
@@ -38,8 +49,10 @@ class FakeTable:
             match = lambda sk: v[":lo"] <= sk <= v[":hi"]
         else:
             raise AssertionError(f"unexpected expression {KeyConditionExpression}")
-        items = [i for (p, sk), i in sorted(self.items.items()) if p == pk and match(sk)]
-        return {"Items": items}
+        items = [copy.deepcopy(i) for (p, sk), i in sorted(self.items.items()) if p == pk and match(sk)]
+        if not ScanIndexForward:
+            items.reverse()
+        return {"Items": items[:Limit] if Limit else items}
 
 
 def event(route, sub="user-a", body=None, qs=None, path=None, b64=False):

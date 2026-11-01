@@ -5,13 +5,20 @@
 # Usage:
 #   AWS_PROFILE=<your-profile> ./scripts/deploy.sh
 # Optional: AWS_REGION (default eu-west-2), STACK_NAME (default workout-tracker)
+# Custom domain (see README): DOMAIN_NAME, CERTIFICATE_ARN (from
+# scripts/deploy-certificate.sh), HOSTED_ZONE_ID (only for Route 53 DNS).
+# Unset ones keep the stack's current value, so a plain redeploy never
+# drops the domain.
+# Invite code: asked for (hidden) on the first crew deploy, or when
+# ROTATE_INVITE=1. INVITE_CODE=... also works. It is never printed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export AWS_REGION="${AWS_REGION:-eu-west-2}"
 STACK_NAME="${STACK_NAME:-workout-tracker}"
 
-run() { printf '+ %s\n' "$*"; "$@"; }
+# Prints the command with any InviteCode value masked, then runs it.
+run() { printf '+ %s\n' "$*" | sed -E 's/InviteCode=[^ ]+/InviteCode=****/g'; "$@"; }
 step() { printf '\n== %s\n' "$*"; }
 output() {
   aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
@@ -27,15 +34,29 @@ step "2/7 Validate template"
 run aws cloudformation validate-template --template-body file://infra/template.yaml --query Description --output text
 
 step "3/7 Deploy CloudFormation stack (creates/updates AWS resources)"
+PARAMS=()
+[[ -n "${DOMAIN_NAME+x}" ]] && PARAMS+=("DomainName=$DOMAIN_NAME")
+[[ -n "${CERTIFICATE_ARN+x}" ]] && PARAMS+=("CertificateArn=$CERTIFICATE_ARN")
+[[ -n "${HOSTED_ZONE_ID+x}" ]] && PARAMS+=("HostedZoneId=$HOSTED_ZONE_ID")
+echo "+ aws cloudformation describe-stacks --stack-name $STACK_NAME (is an invite code already set?)"
+HAS_INVITE="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+  --query "Stacks[0].Parameters[?ParameterKey=='InviteCode'] | length(@)" --output text 2>/dev/null || echo 0)"
+if [[ -z "${INVITE_CODE:-}" && ( "$HAS_INVITE" != "1" || -n "${ROTATE_INVITE:-}" ) ]]; then
+  read -rs -p "Crew invite code (12+ characters, hidden): " INVITE_CODE; echo
+fi
+[[ -n "${INVITE_CODE:-}" ]] && PARAMS+=("InviteCode=$INVITE_CODE")
 run aws cloudformation deploy \
   --stack-name "$STACK_NAME" \
   --template-file infra/template.yaml \
   --capabilities CAPABILITY_IAM \
-  --no-fail-on-empty-changeset
+  --no-fail-on-empty-changeset \
+  ${PARAMS[@]+--parameter-overrides "${PARAMS[@]}"}
 
 step "4/7 Read stack outputs"
 echo "+ aws cloudformation describe-stacks --stack-name $STACK_NAME (Outputs)"
 SITE_URL="$(output SiteUrl)"
+CLOUDFRONT_URL="$(output CloudFrontUrl)"
+DNS_TARGET="$(output DnsTarget)"
 API_URL="$(output ApiUrl)"
 USER_POOL_ID="$(output UserPoolId)"
 CLIENT_ID="$(output UserPoolClientId)"
@@ -43,6 +64,7 @@ HOSTED_UI_DOMAIN="$(output HostedUiDomain)"
 BUCKET="$(output SiteBucketName)"
 DISTRIBUTION_ID="$(output DistributionId)"
 FUNCTION_NAME="$(output FunctionName)"
+PRESIGNUP_FUNCTION="$(output PreSignUpFunctionName)"
 
 step "5/7 Upload Lambda code"
 BUILD_DIR="$(mktemp -d)"
@@ -51,6 +73,10 @@ run zip -j -q "$BUILD_DIR/lambda.zip" backend/handler.py
 run aws lambda update-function-code --function-name "$FUNCTION_NAME" \
   --zip-file "fileb://$BUILD_DIR/lambda.zip" --query LastUpdateStatus --output text
 run aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+run zip -j -q "$BUILD_DIR/presignup.zip" backend/presignup.py
+run aws lambda update-function-code --function-name "$PRESIGNUP_FUNCTION" \
+  --zip-file "fileb://$BUILD_DIR/presignup.zip" --query LastUpdateStatus --output text
+run aws lambda wait function-updated --function-name "$PRESIGNUP_FUNCTION"
 
 step "6/7 Write frontend/config.js"
 echo "+ write frontend/config.js"
@@ -62,14 +88,21 @@ window.APP_CONFIG = {
   region: "$AWS_REGION",
   userPoolId: "$USER_POOL_ID",
   clientId: "$CLIENT_ID",
-  hostedUiDomain: "$HOSTED_UI_DOMAIN"
+  hostedUiDomain: "$HOSTED_UI_DOMAIN",
+  siteDomain: "${SITE_URL#https://}"
 };
 EOF
 
 step "7/7 Upload frontend and refresh the CDN"
 run aws s3 sync frontend/ "s3://$BUCKET/" --delete --exclude ".*" --cache-control "no-cache"
+# The CLI doesn't know the .webmanifest type; set it so iOS/Android read it.
+run aws s3 cp frontend/manifest.webmanifest "s3://$BUCKET/manifest.webmanifest" \
+  --content-type "application/manifest+json" --cache-control "no-cache"
 run aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" \
   --query Invalidation.Id --output text
 
-printf '\nDone.\n  Site:          %s\n  User pool ID:  %s\n' "$SITE_URL" "$USER_POOL_ID"
+printf '\nDone.\n  Site:            %s\n  CloudFront URL:  %s\n  User pool ID:    %s\n' "$SITE_URL" "$CLOUDFRONT_URL" "$USER_POOL_ID"
+if [[ "$SITE_URL" != "$CLOUDFRONT_URL" ]]; then
+  echo "  DNS: the custom domain needs a CNAME (DNS only) pointing at $DNS_TARGET unless Route 53 manages it."
+fi
 echo "Note: frontend/config.js now holds this deployment's IDs. Don't commit it (git checkout frontend/config.js restores the blank one)."

@@ -3,18 +3,163 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0F1024">
+  <script>
+    // Theme before first paint: dark unless Light was picked in Settings.
+    try { document.documentElement.dataset.theme = localStorage.getItem('wt.theme') === 'light' ? 'light' : 'dark'; }
+    catch { document.documentElement.dataset.theme = 'dark'; }
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Workouts">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
   <title>Workouts</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="boot" class="boot">
     <p id="boot-msg">Loading…</p>
+  </div>
+
+  <!-- LANDING (shown when signed out; same page so the Cognito callback URL stays "/") -->
+  <div id="landing" class="landing" hidden>
+    <div class="lp-wrap">
+      <nav class="lp-nav" aria-label="Workouts">
+        <a class="brand" href="#top"><img src="icon.svg" alt="" width="34" height="34">Workouts</a>
+        <button class="btn primary" data-sign-in>Sign in</button>
+      </nav>
+
+      <section class="hero" id="top">
+        <span class="blob v"></span><span class="blob s"></span><span class="blob m"></span>
+        <div class="hero-grid">
+          <div class="reveal">
+            <span class="eyebrow">Invite only · train for you</span>
+            <h1><span class="ln">Show up.</span> <span class="ln">Log it.</span> <span class="ln grad-text">Feel the progress.</span></h1>
+            <p class="sub">Log your sets as you go, see how far you've come, and celebrate every step forward at your own pace.</p>
+            <div class="cta-row">
+              <button class="btn primary" data-sign-in>Sign in</button>
+              <button class="btn hot invite-btn" data-open-invite>Have an invite? Join</button>
+            </div>
+          </div>
+          <div class="hero-art reveal">
+            <div class="phone" aria-hidden="true"><div class="screen" style="--c:#FF6B6B">
+            <div class="m-title">Workout</div>
+            <div class="m-card"><b>Bench press</b><div class="m-hint">Last time: 8 × 60 kg</div>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#2EC5FF">3</i><span>6</span><span>65 kg</span></div></div>
+            <div class="m-card"><b>Pull-ups</b>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>10</span><span>0 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>0 kg</span></div></div>
+            <div class="m-btn">Finish</div>
+            <div class="m-tab"><span>Calendar</span><span class="on">Workout</span><span>Progress</span></div>
+          </div></div>
+            <img class="athlete" src="assets/athlete.svg" alt="Illustration of a tall athlete striding forward with a dumbbell and his phone">
+            <span class="chip pr">🏆 New PR: 100 kg</span>
+            <span class="chip streak">3 sessions this week</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="lp-section" aria-labelledby="features-h">
+        <span class="blob c" style="width:220px;height:220px;right:-80px;top:20px"></span>
+        <h2 id="features-h" class="reveal">Everything you need. <span class="grad-text">Nothing you don't.</span></h2>
+        <p class="lede reveal">Four things, done properly, so logging never gets in the way of lifting.</p>
+        <div class="feature-grid">
+          <article class="card feature coral reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg></div>
+            <h3>Log as you go</h3>
+            <p>Type each set as you do it. No plans to fill in first, and it shows what you lifted last time.</p>
+          </article>
+          <article class="card feature sky reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 15h2M14 15h2"/></svg></div>
+            <h3>Calendar history</h3>
+            <p>Every session lands on a calendar, so you can check exactly what you did on any day.</p>
+          </article>
+          <article class="card feature lime reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg></div>
+            <h3>Progress charts</h3>
+            <p>Pick a lift and watch your estimated max, volume or top set climb week after week.</p>
+          </article>
+          <article class="card feature mango reveal">
+            <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></div>
+            <h3>Share your session</h3>
+            <p>Turn any workout into a card worth celebrating, with your personal bests on it.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lp-section" aria-labelledby="how-h">
+        <span class="blob l" style="width:200px;height:200px;left:-90px;bottom:0"></span>
+        <h2 id="how-h" class="reveal">How it works</h2>
+        <p class="lede reveal">Three simple steps that fit around your day.</p>
+        <ol class="steps">
+          <li class="card reveal" style="--c:var(--coral)"><span class="num">1</span><div><h3>Start a workout</h3><p>Tap Start Workout. It's dated today and ready to go.</p></div></li>
+          <li class="card reveal" style="--c:var(--mango)"><span class="num">2</span><div><h3>Add sets as you go</h3><p>Reps and weight, set by set. Close the app mid-session and it's still there.</p></div></li>
+          <li class="card reveal" style="--c:var(--lime)"><span class="num">3</span><div><h3>Watch the line go up</h3><p>Finish, celebrate your personal bests, and see the progress you've built.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="lp-section" aria-labelledby="preview-h">
+        <span class="blob v" style="width:260px;height:260px;right:-100px;top:60px"></span>
+        <h2 id="preview-h" class="reveal">A look inside</h2>
+        <p class="lede reveal">Built for one-handed use between sets.</p>
+        <div class="preview-row reveal">
+          <figure><div class="phone" aria-hidden="true"><div class="screen" style="--c:#FF6B6B">
+            <div class="m-title">Workout</div>
+            <div class="m-card"><b>Bench press</b><div class="m-hint">Last time: 8 × 60 kg</div>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>62.5 kg</span></div>
+              <div class="m-row"><i style="background:#2EC5FF">3</i><span>6</span><span>65 kg</span></div></div>
+            <div class="m-card"><b>Pull-ups</b>
+              <div class="m-row"><i style="background:#FF6B6B">1</i><span>10</span><span>0 kg</span></div>
+              <div class="m-row"><i style="background:#FFB547">2</i><span>8</span><span>0 kg</span></div></div>
+            <div class="m-btn">Finish</div>
+            <div class="m-tab"><span>Calendar</span><span class="on">Workout</span><span>Progress</span></div>
+          </div></div><figcaption>Log every set</figcaption></figure>
+          <figure><div class="phone" aria-hidden="true"><div class="screen" style="--c:#2EC5FF">
+              <div class="m-title">Calendar</div>
+              <div class="m-card"><b>November</b>
+                <div class="m-cal"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span class="d">1</span>
+                  <span>2</span><span class="d">3</span><span>4</span><span class="d">5</span><span>6</span><span class="t">7</span><span>8</span>
+                  <span>9</span><span class="p">10</span><span>11</span><span class="p">12</span><span>13</span><span>14</span><span>15</span></div></div>
+              <div class="m-card"><b>Today · Push day</b><span style="color:#B9BBD6">Bench press, Overhead press, Dips</span></div>
+              <div class="m-tab"><span class="on">Calendar</span><span>Workout</span><span>Progress</span></div>
+            </div></div><figcaption>Every day on record</figcaption></figure>
+          <figure><div class="phone" aria-hidden="true"><div class="screen" style="--c:#B8F23A">
+              <div class="m-title">Progress</div>
+              <div class="m-seg"><span class="on">Est. 1RM</span><span>Volume</span><span>Top set</span></div>
+              <div class="m-card"><b>Bench press</b>
+                <svg viewBox="0 0 180 90" style="width:100%;height:auto;display:block">
+                  <defs><linearGradient id="mf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B8F23A" stop-opacity=".45"/><stop offset="1" stop-color="#B8F23A" stop-opacity="0"/></linearGradient></defs>
+                  <path d="M4 78 L34 70 L64 64 L94 52 L124 44 L154 30 L176 14 L176 88 L4 88 Z" fill="url(#mf)" stroke="none"/>
+                  <path d="M4 78 L34 70 L64 64 L94 52 L124 44 L154 30 L176 14" stroke="#B8F23A" stroke-width="3" fill="none"/>
+                  <circle cx="176" cy="14" r="4" fill="#B8F23A" stroke="#1B1C3A" stroke-width="2"/>
+                </svg></div>
+              <div class="m-stat"><div><strong>82 kg</strong><em>Best est. 1RM</em></div><div><strong>+12%</strong><em>Since September</em></div></div>
+              <div class="m-tab"><span>Calendar</span><span>Workout</span><span class="on">Progress</span></div>
+            </div></div><figcaption>See how far you've come</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="lp-cta reveal" aria-labelledby="cta-h">
+        <h2 id="cta-h">Ready to train?</h2>
+        <p>Small, steady sessions add up. Start where you are.</p>
+        <button class="btn" data-sign-in>Sign in</button>
+        <button class="btn hot invite-btn" data-open-invite>Have an invite? Join</button>
+        <p class="invite">Invite only. Ask Courtney for an account.</p>
+      </section>
+
+      <footer class="lp-footer">
+        <span>Workouts</span>
+        <span>© <span id="lp-year">2026</span></span>
+      </footer>
+    </div>
   </div>
 
   <main id="app" hidden>
@@ -65,8 +210,10 @@
       </header>
 
       <div id="wk-empty" class="empty-state">
-        <p>No workout in progress.</p>
-        <button class="btn primary" id="wk-start-empty">Start Workout</button>
+        <img class="art" src="assets/athlete.svg" alt="" width="150" height="300">
+        <p class="lead">Nothing on the bar yet.</p>
+        <p>Start a workout and log your sets as you go.</p>
+        <button class="btn hot" id="wk-start-empty">Start Workout</button>
       </div>
 
       <div id="wk-editor" hidden>
@@ -74,7 +221,7 @@
         <button class="btn secondary" id="wk-add-ex">+ Add exercise</button>
         <p id="wk-error" class="error" role="alert" hidden></p>
         <div class="wk-actions">
-          <button class="btn primary" id="wk-finish">Finish</button>
+          <button class="btn hot" id="wk-finish">Finish</button>
           <button class="btn text danger" id="wk-discard">Discard</button>
         </div>
       </div>
@@ -89,14 +236,20 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#gear"/></svg>
         </button>
       </header>
+      <div class="segmented mode" id="prog-mode" role="radiogroup" aria-label="Whose progress">
+        <button role="radio" data-mode="me" aria-checked="true">Me</button>
+        <button role="radio" data-mode="crew" aria-checked="false">Crew</button>
+      </div>
       <div id="prog-content">
         <label class="field-label" for="prog-exercise">Exercise</label>
         <select id="prog-exercise"></select>
         <div class="segmented" id="prog-metric" role="radiogroup" aria-label="Metric">
+          <button role="radio" data-metric="pct" hidden>% change</button>
           <button role="radio" data-metric="e1rm">Est. 1RM</button>
           <button role="radio" data-metric="volume">Volume</button>
           <button role="radio" data-metric="top">Top set</button>
         </div>
+        <div id="crew-chips" class="chips" role="group" aria-label="Who to show" hidden></div>
         <div class="card chart-card">
           <p class="chart-caption" id="chart-caption"></p>
           <div id="chart" class="chart"></div>
@@ -104,9 +257,44 @@
         </div>
       </div>
       <div id="prog-empty" class="empty-state" hidden>
-        <p>No completed workouts yet.</p>
-        <p class="muted">Finish a workout and your progress will show up here.</p>
+        <img class="art" src="assets/athlete.svg" alt="" width="150" height="300">
+        <p class="lead">No line to draw yet.</p>
+        <p>Finish a workout and your progress shows up here. Every session counts.</p>
       </div>
+    </section>
+
+    <!-- CREW -->
+    <section id="view-crew" class="view" hidden>
+      <header class="large-header">
+        <div>
+          <h1>Crew</h1>
+          <p class="subtitle" id="crew-sub">Training alongside each other</p>
+        </div>
+        <button class="icon-btn" data-open-settings aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#gear"/></svg>
+        </button>
+      </header>
+      <p id="crew-private" class="notice" hidden>You're not sharing with the crew right now, so they can't see your goals or join you in competitions. You can change this in Settings.</p>
+      <div class="segmented" id="crew-tabs" role="tablist" aria-label="Crew sections">
+        <button role="tab" data-crew-tab="goals" aria-selected="true">Goals</button>
+        <button role="tab" data-crew-tab="comps" aria-selected="false">Challenges</button>
+        <button role="tab" data-crew-tab="feed" aria-selected="false">Feed</button>
+      </div>
+      <div id="crew-goals" class="crew-pane">
+        <div class="section-head"><h2>Your goals</h2><button class="pill-btn" id="goal-new">+ New goal</button></div>
+        <ul id="my-goals" class="goal-list"></ul>
+        <div class="section-head"><h2>The crew's goals</h2></div>
+        <ul id="crew-goal-list" class="goal-list"></ul>
+      </div>
+      <div id="crew-comps" class="crew-pane" hidden>
+        <div class="section-head"><h2>Challenges</h2><button class="pill-btn" id="comp-new">+ New challenge</button></div>
+        <div id="comp-list"></div>
+        <details class="past" id="comp-past-wrap" hidden><summary>Past challenges</summary><div id="comp-past"></div></details>
+      </div>
+      <div id="crew-feed" class="crew-pane" hidden>
+        <ul id="feed-list" class="feed-list"></ul>
+      </div>
+      <p id="crew-error" class="empty" hidden></p>
     </section>
 
     <button class="fab" id="start-btn">Start Workout</button>
@@ -124,6 +312,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>
         Progress
       </button>
+      <button data-view="crew">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9.5" r="2.5"/><path d="M3.5 19c.6-3.4 2.8-5.2 5.5-5.2s4.9 1.8 5.5 5.2M14.5 14.6c.8-.5 1.6-.7 2.5-.7 2.2 0 3.9 1.5 4.4 4.6"/></svg>
+        Crew
+      </button>
     </nav>
   </main>
 
@@ -137,6 +329,8 @@
     <div id="detail-body"></div>
     <div class="sheet-actions">
       <button class="btn primary" id="detail-start" hidden>Start Workout</button>
+      <button class="btn primary" id="detail-share" hidden>Share</button>
+      <button class="btn secondary" id="detail-repeat" hidden>Repeat Today</button>
       <button class="btn secondary" id="detail-edit">Edit</button>
       <button class="btn text danger" id="detail-delete">Delete</button>
     </div>
@@ -157,17 +351,146 @@
           <button role="radio" data-unit="lb">lb</button>
         </div>
       </div>
+      <div class="row">
+        <span>Appearance</span>
+        <div class="segmented small" id="theme-toggle" role="radiogroup" aria-label="Appearance">
+          <button role="radio" data-theme-choice="dark">Dark</button>
+          <button role="radio" data-theme-choice="light">Light</button>
+        </div>
+      </div>
+    </div>
+    <div class="card settings-card" id="crew-settings" hidden>
+      <div class="row col">
+        <label for="set-name">Display name</label>
+        <div class="inline"><input id="set-name" maxlength="30" autocomplete="nickname"><button class="pill-btn" id="set-name-save">Save</button></div>
+      </div>
+      <div class="row col">
+        <span>Your colour</span>
+        <div class="swatches" id="set-colours" role="radiogroup" aria-label="Your colour"></div>
+      </div>
+      <div class="row">
+        <label for="set-sharing">Share my progress with the crew</label>
+        <input type="checkbox" id="set-sharing" class="switch">
+      </div>
+      <p class="hint">Friends only ever see your name, colour, chart lines, goal progress and challenge results. Never your workouts or sets.</p>
     </div>
     <button class="btn text danger" id="sign-out">Sign Out</button>
   </dialog>
 
-  <div id="toast" class="toast" role="status" hidden></div>
+
+  <!-- First login: display name -->
+  <dialog id="onboard" class="sheet">
+    <form id="onboard-form" method="dialog">
+      <div class="sheet-head"><span></span><strong>Welcome to the crew</strong><span></span></div>
+      <p class="muted">What should everyone call you? You can change it any time in Settings.</p>
+      <label class="field-label" for="onboard-name">Display name</label>
+      <input id="onboard-name" class="text-input" maxlength="30" autocomplete="nickname" required>
+      <p id="onboard-error" class="error" hidden></p>
+      <button class="btn primary" type="submit">Let's go</button>
+    </form>
+  </dialog>
+
+  <!-- New goal -->
+  <dialog id="goal-dialog" class="sheet">
+    <form id="goal-form" method="dialog">
+      <div class="sheet-head"><button type="button" class="btn-link" data-close>Cancel</button><strong>New goal</strong><button class="btn-link" type="submit">Save</button></div>
+      <label class="field-label" for="goal-type">Goal</label>
+      <select id="goal-type">
+        <option value="weight">Lift a weight</option>
+        <option value="e1rm">Reach an estimated 1RM</option>
+        <option value="perWeek">Workouts per week</option>
+        <option value="volume">Total volume between dates</option>
+      </select>
+      <div id="goal-ex-wrap"><label class="field-label" for="goal-ex">Exercise</label><input id="goal-ex" class="text-input" list="exercise-names" autocomplete="off"></div>
+      <label class="field-label" for="goal-target" id="goal-target-label">Target</label>
+      <input id="goal-target" class="text-input" inputmode="decimal" required>
+      <div id="goal-range" class="two" hidden>
+        <div><label class="field-label" for="goal-start">From</label><input id="goal-start" type="date" class="text-input"></div>
+        <div><label class="field-label" for="goal-end">To</label><input id="goal-end" type="date" class="text-input"></div>
+      </div>
+      <label class="field-label" for="goal-deadline">Deadline (optional)</label>
+      <input id="goal-deadline" type="date" class="text-input">
+      <p id="goal-error" class="error" hidden></p>
+    </form>
+  </dialog>
+
+  <!-- New challenge -->
+  <dialog id="comp-dialog" class="sheet">
+    <form id="comp-form" method="dialog">
+      <div class="sheet-head"><button type="button" class="btn-link" data-close>Cancel</button><strong>New challenge</strong><button class="btn-link" type="submit">Create</button></div>
+      <label class="field-label" for="comp-name">Name</label>
+      <input id="comp-name" class="text-input" maxlength="40" placeholder="e.g. Spring strength" required>
+      <label class="field-label" for="comp-metric">Measure</label>
+      <select id="comp-metric">
+        <option value="e1rmPct">Biggest % improvement in estimated 1RM (fairest)</option>
+        <option value="workouts">Most workouts completed</option>
+        <option value="volume">Most total volume</option>
+        <option value="streak">Longest streak of weeks hitting a target</option>
+      </select>
+      <div id="comp-ex-wrap"><label class="field-label" for="comp-ex">Exercise</label><input id="comp-ex" class="text-input" list="exercise-names" autocomplete="off"></div>
+      <div id="comp-weekly-wrap" hidden><label class="field-label" for="comp-weekly">Workouts per week</label><input id="comp-weekly" class="text-input" inputmode="numeric" value="3"></div>
+      <div class="two">
+        <div><label class="field-label" for="comp-start">Starts</label><input id="comp-start" type="date" class="text-input" required></div>
+        <div><label class="field-label" for="comp-end">Ends</label><input id="comp-end" type="date" class="text-input" required></div>
+      </div>
+      <p class="hint">Everyone is measured against their own starting point, so it's about progress, not who's strongest.</p>
+      <p id="comp-error" class="error" hidden></p>
+    </form>
+  </dialog>
+
+  <!-- Invite sign-up (landing page) -->
+  <dialog id="invite" class="sheet">
+    <div class="sheet-head"><span></span><strong>Join the crew</strong><button class="btn-link" data-close>Close</button></div>
+    <form id="invite-form">
+      <label class="field-label" for="inv-code">Invite code</label>
+      <input id="inv-code" class="text-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the code Courtney sent you" required>
+      <p class="hint">Then create your account by adding your email and choosing a password. You'll use these to sign in.</p>
+      <label class="field-label" for="inv-email">Email</label>
+      <input id="inv-email" type="email" class="text-input" autocomplete="email" required>
+      <label class="field-label" for="inv-pass">Password</label>
+      <input id="inv-pass" type="password" class="text-input" autocomplete="new-password" minlength="12" required>
+      <p class="hint">At least 12 characters, with upper and lower case letters and a number.</p>
+      <p id="inv-error" class="error" role="alert" hidden></p>
+      <button class="btn primary" type="submit" id="inv-submit">Create account</button>
+    </form>
+    <form id="confirm-form" hidden>
+      <p class="muted">We've emailed you a 6-digit code. Enter it to confirm your email.</p>
+      <label class="field-label" for="inv-confirm">Confirmation code</label>
+      <input id="inv-confirm" class="text-input" inputmode="numeric" autocomplete="one-time-code" required>
+      <p id="confirm-error" class="error" role="alert" hidden></p>
+      <button class="btn primary" type="submit">Confirm</button>
+      <button class="btn text" type="button" id="inv-resend">Send the code again</button>
+    </form>
+    <div id="invite-done" hidden>
+      <p class="lead-text">You're in! 🎉</p>
+      <p class="muted">Sign in with your email and password to get started.</p>
+      <button class="btn primary" data-sign-in>Sign in</button>
+    </div>
+  </dialog>
+
+  <!-- Share preview sheet -->
+  <dialog id="share" class="sheet">
+    <div class="sheet-head">
+      <span></span>
+      <strong>Share Workout</strong>
+      <button class="btn-link" data-close>Done</button>
+    </div>
+    <img id="share-preview" class="share-preview" alt="Preview of the workout image">
+    <div class="sheet-actions two-up">
+      <button class="btn primary" id="share-go">Share</button>
+      <button class="btn secondary" id="share-save">Save</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" popover="manual" hidden></div>
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="gear" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm7.43-2.53a7.8 7.8 0 0 0 0-1.94l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.68-.98l-.38-2.65A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.6.25-1.17.58-1.68.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65a7.8 7.8 0 0 0 0 1.94l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.61.22l2.49-1c.51.4 1.08.73 1.68.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.38-2.65c.6-.25 1.17-.58 1.68-.98l2.49 1c.22.08.48 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65Z"/></symbol>
   </svg>
 
   <script src="config.js"></script>
+  <script src="share.js"></script>
   <script src="app.js"></script>
+  <script src="crew.js"></script>
 </body>
 </html>

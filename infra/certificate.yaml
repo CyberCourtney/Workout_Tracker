@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  TLS certificate for the workout tracker's custom domain. Deploy in us-east-1:
+  CloudFront only accepts ACM certificates from that region. ACM public
+  certificates are free.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: The app's custom domain, e.g. workout.example.com
+    AllowedPattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: >-
+      Route 53 hosted zone for the domain. Leave empty when DNS is hosted
+      elsewhere (e.g. Cloudflare); then add the validation CNAME by hand while
+      this stack is creating (scripts/deploy-certificate.sh prints it).
+
+Conditions:
+  HasZone: !Not [!Equals [!Ref HostedZoneId, ""]]
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions: !If
+        - HasZone
+        - - DomainName: !Ref DomainName
+            HostedZoneId: !Ref HostedZoneId
+        - !Ref AWS::NoValue
+
+Outputs:
+  CertificateArn:
+    Value: !Ref Certificate

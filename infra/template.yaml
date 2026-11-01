@@ -4,6 +4,38 @@ Description: >-
   frontend, Cognito Hosted UI login, HTTP API with JWT authorizer, one Lambda,
   one on-demand DynamoDB table. No VPC and nothing billed by the hour.
 
+Parameters:
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Optional custom domain (e.g. workout.example.com). Empty = cloudfront.net URL only.
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate in us-east-1 covering DomainName (from infra/certificate.yaml). Required with DomainName.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Optional Route 53 hosted zone for DomainName. Empty = add the DNS record by hand (e.g. Cloudflare CNAME).
+  InviteCode:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: Code friends must enter to create an account (checked by the Pre sign-up trigger). Never stored in source.
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  HasZone: !And
+    - !Condition HasDomain
+    - !Not [!Equals [!Ref HostedZoneId, ""]]
+
+Rules:
+  CertificateWithDomain:
+    RuleCondition: !Not [!Equals [!Ref DomainName, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref CertificateArn, ""]]
+        AssertDescription: CertificateArn is required when DomainName is set.
+
 Resources:
   # ---------------------------------------------------------------- storage
   WorkoutsTable:
@@ -24,6 +56,9 @@ Resources:
           KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification: # crew feed items and cheer markers expire on their own (free)
+        AttributeName: expiresAt
+        Enabled: true
       SSESpecification:
         SSEEnabled: false # AWS-owned key: free (a customer-managed KMS key costs monthly)
 
@@ -31,11 +66,13 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolTier: LITE
+      UserPoolTier: ESSENTIALS # free up to 10,000 monthly users; needed for the branded login page
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true # self sign-up disabled
+        AllowAdminCreateUserOnly: false # self sign-up on, gated by the invite code
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignUpFunction.Arn
       Policies:
         PasswordPolicy:
           MinimumLength: 12
@@ -53,6 +90,7 @@ Resources:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
       UserPoolId: !Ref UserPool
+      ManagedLoginVersion: 2 # the newer login page with a theme
       # Unique per stack without hardcoding anything: first block of the stack's UUID.
       Domain: !Sub
         - "workouts-${Suffix}"
@@ -67,10 +105,15 @@ Resources:
       AllowedOAuthFlows: [code]
       AllowedOAuthScopes: [openid, email]
       SupportedIdentityProviders: [COGNITO]
-      CallbackURLs:
-        - !Sub "https://${Distribution.DomainName}/"
-      LogoutURLs:
-        - !Sub "https://${Distribution.DomainName}/"
+      # The cloudfront.net URL keeps working alongside the custom domain.
+      CallbackURLs: !If
+        - HasDomain
+        - [!Sub "https://${Distribution.DomainName}/", !Sub "https://${DomainName}/"]
+        - [!Sub "https://${Distribution.DomainName}/"]
+      LogoutURLs: !If
+        - HasDomain
+        - [!Sub "https://${Distribution.DomainName}/", !Sub "https://${DomainName}/"]
+        - [!Sub "https://${Distribution.DomainName}/"]
       ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
       PreventUserExistenceErrors: ENABLED
       EnableTokenRevocation: true
@@ -81,6 +124,91 @@ Resources:
         AccessToken: hours
         IdToken: hours
         RefreshToken: days
+
+  # ---------------------------------------------------------------- invite-only sign-up
+  PreSignUpRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: logs-only
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt PreSignUpLogGroup.Arn
+
+  PreSignUpLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-presignup"
+      RetentionInDays: 14
+
+  PreSignUpFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-presignup"
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: presignup.lambda_handler
+      MemorySize: 128
+      Timeout: 5
+      Role: !GetAtt PreSignUpRole.Arn
+      Environment:
+        Variables:
+          INVITE_CODE: !Ref InviteCode
+      LoggingConfig:
+        LogGroup: !Ref PreSignUpLogGroup
+      # Placeholder that refuses every sign-up until scripts/deploy.sh uploads
+      # backend/presignup.py (fails closed).
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              raise Exception("Sign-up is not open yet")
+
+  PreSignUpPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PreSignUpFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  # Login page styled like the app (navy, violet, rounded). Artwork lives in
+  # infra/branding/ and is embedded below as base64 (`base64 -i file.svg`).
+  LoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+      UseCognitoProvidedValues: false
+      Settings: {"categories":{"auth":{"authMethodOrder":[[{"display":"INPUT","type":"USERNAME_PASSWORD"}]],"federation":{"interfaceStyle":"BUTTON_LIST","order":[]}},"form":{"displayGraphics":true,"instructions":{"enabled":false},"languageSelector":{"enabled":false},"location":{"horizontal":"CENTER","vertical":"CENTER"},"sessionTimerDisplay":"NONE"},"global":{"colorSchemeMode":"DARK","pageFooter":{"enabled":false},"pageHeader":{"enabled":false},"spacingDensity":"REGULAR"},"signUp":{"acceptanceElements":[{"enforcement":"NONE","textKey":"en"}]}},"componentClasses":{"buttons":{"borderRadius":16.0},"divider":{"darkMode":{"borderColor":"31335aff"},"lightMode":{"borderColor":"e3e3f1ff"}},"dropDown":{"borderRadius":14.0,"darkMode":{"defaults":{"itemBackgroundColor":"1b1c3aff"},"hover":{"itemBackgroundColor":"262849ff","itemBorderColor":"31335aff","itemTextColor":"f7f7fbff"},"match":{"itemBackgroundColor":"31335aff","itemTextColor":"2ec5ffff"}},"lightMode":{"defaults":{"itemBackgroundColor":"ffffffff"},"hover":{"itemBackgroundColor":"eeeef7ff","itemBorderColor":"e3e3f1ff","itemTextColor":"0f1024ff"},"match":{"itemBackgroundColor":"e3e3f1ff","itemTextColor":"086a92ff"}}},"focusState":{"darkMode":{"borderColor":"2ec5ffff"},"lightMode":{"borderColor":"5443d6ff"}},"idpButtons":{"icons":{"enabled":true}},"input":{"borderRadius":14.0,"darkMode":{"defaults":{"backgroundColor":"262849ff","borderColor":"31335aff"},"placeholderColor":"9a9cc0ff"},"lightMode":{"defaults":{"backgroundColor":"eeeef7ff","borderColor":"e3e3f1ff"},"placeholderColor":"5d5f7dff"}},"inputDescription":{"darkMode":{"textColor":"9a9cc0ff"},"lightMode":{"textColor":"5d5f7dff"}},"inputLabel":{"darkMode":{"textColor":"b9bbd6ff"},"lightMode":{"textColor":"4a4c68ff"}},"link":{"darkMode":{"defaults":{"textColor":"a29bfeff"},"hover":{"textColor":"2ec5ffff"}},"lightMode":{"defaults":{"textColor":"5443d6ff"},"hover":{"textColor":"086a92ff"}}},"optionControls":{"darkMode":{"defaults":{"backgroundColor":"262849ff","borderColor":"31335aff"},"selected":{"backgroundColor":"b8f23aff","foregroundColor":"0f1024ff"}},"lightMode":{"defaults":{"backgroundColor":"ffffffff","borderColor":"5d5f7dff"},"selected":{"backgroundColor":"5443d6ff","foregroundColor":"ffffffff"}}},"statusIndicator":{"darkMode":{"error":{"backgroundColor":"2a1420ff","borderColor":"ff8a8aff","indicatorColor":"ff8a8aff"},"pending":{"indicatorColor":"AAAAAAAA"},"success":{"backgroundColor":"1d2a14ff","borderColor":"b8f23aff","indicatorColor":"b8f23aff"},"warning":{"backgroundColor":"2a2114ff","borderColor":"ffb547ff","indicatorColor":"ffb547ff"}},"lightMode":{"error":{"backgroundColor":"fff3f3ff","borderColor":"b42a26ff","indicatorColor":"b42a26ff"},"pending":{"indicatorColor":"AAAAAAAA"},"success":{"backgroundColor":"f4fbe8ff","borderColor":"3f6600ff","indicatorColor":"3f6600ff"},"warning":{"backgroundColor":"fff8ecff","borderColor":"8a5100ff","indicatorColor":"8a5100ff"}}}},"components":{"alert":{"borderRadius":16.0,"darkMode":{"error":{"backgroundColor":"2a1420ff","borderColor":"ff8a8aff"}},"lightMode":{"error":{"backgroundColor":"fff3f3ff","borderColor":"b42a26ff"}}},"favicon":{"enabledTypes":["SVG"]},"form":{"backgroundImage":{"enabled":false},"borderRadius":24.0,"darkMode":{"backgroundColor":"1b1c3aff","borderColor":"31335aff"},"lightMode":{"backgroundColor":"ffffffff","borderColor":"e3e3f1ff"},"logo":{"enabled":true,"formInclusion":"IN","location":"CENTER","position":"TOP"}},"idpButton":{"custom":{},"standard":{"darkMode":{"active":{"backgroundColor":"31335aff","borderColor":"2ec5ffff","textColor":"f7f7fbff"},"defaults":{"backgroundColor":"262849ff","borderColor":"31335aff","textColor":"f7f7fbff"},"hover":{"backgroundColor":"31335aff","borderColor":"2ec5ffff","textColor":"f7f7fbff"}},"lightMode":{"active":{"backgroundColor":"e3e3f1ff","borderColor":"5443d6ff","textColor":"0f1024ff"},"defaults":{"backgroundColor":"ffffffff","borderColor":"e3e3f1ff","textColor":"0f1024ff"},"hover":{"backgroundColor":"eeeef7ff","borderColor":"5443d6ff","textColor":"0f1024ff"}}}},"pageBackground":{"darkMode":{"color":"0f1024ff"},"image":{"enabled":true},"lightMode":{"color":"f7f7fbff"}},"pageFooter":{"backgroundImage":{"enabled":false},"darkMode":{"background":{"color":"0f1024ff"},"borderColor":"31335aff"},"lightMode":{"background":{"color":"f7f7fbff"},"borderColor":"e3e3f1ff"},"logo":{"enabled":false,"location":"START"}},"pageHeader":{"backgroundImage":{"enabled":false},"darkMode":{"background":{"color":"0f1024ff"},"borderColor":"31335aff"},"lightMode":{"background":{"color":"f7f7fbff"},"borderColor":"e3e3f1ff"},"logo":{"enabled":false,"location":"START"}},"pageText":{"darkMode":{"bodyColor":"b9bbd6ff","descriptionColor":"b9bbd6ff","headingColor":"f7f7fbff"},"lightMode":{"bodyColor":"4a4c68ff","descriptionColor":"4a4c68ff","headingColor":"0f1024ff"}},"phoneNumberSelector":{"displayType":"TEXT"},"primaryButton":{"darkMode":{"active":{"backgroundColor":"6c5ce7ff","textColor":"ffffffff"},"defaults":{"backgroundColor":"8c7cf0ff","textColor":"0f1024ff"},"disabled":{"backgroundColor":"262849ff","borderColor":"31335aff"},"hover":{"backgroundColor":"2ec5ffff","textColor":"0f1024ff"}},"lightMode":{"active":{"backgroundColor":"6c5ce7ff","textColor":"ffffffff"},"defaults":{"backgroundColor":"8c7cf0ff","textColor":"0f1024ff"},"disabled":{"backgroundColor":"eeeef7ff","borderColor":"e3e3f1ff"},"hover":{"backgroundColor":"2ec5ffff","textColor":"0f1024ff"}}},"secondaryButton":{"darkMode":{"active":{"backgroundColor":"31335aff","borderColor":"2ec5ffff","textColor":"2ec5ffff"},"defaults":{"backgroundColor":"1b1c3aff","borderColor":"a29bfeff","textColor":"a29bfeff"},"hover":{"backgroundColor":"262849ff","borderColor":"2ec5ffff","textColor":"2ec5ffff"}},"lightMode":{"active":{"backgroundColor":"e3e3f1ff","borderColor":"086a92ff","textColor":"086a92ff"},"defaults":{"backgroundColor":"ffffffff","borderColor":"5443d6ff","textColor":"5443d6ff"},"hover":{"backgroundColor":"eeeef7ff","borderColor":"086a92ff","textColor":"086a92ff"}}}}}
+      Assets:
+        - Category: FORM_LOGO
+          ColorMode: DYNAMIC
+          Extension: SVG
+          Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KICA8ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM4QzdDRjAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMyRUM1RkYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyOCIgZmlsbD0idXJsKCNnKSIvPgogIDxwYXRoIGQ9Ik0xMTIgMzUyIEwyMDggMjU2IEwyNzIgMzEyIEw0MDAgMTY4IiBmaWxsPSJub25lIiBzdHJva2U9IiMwRjEwMjQiIHN0cm9rZS13aWR0aD0iNDQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0zMTIgMTYwIEg0MDggVjI1NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMEYxMDI0IiBzdHJva2Utd2lkdGg9IjQ0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==
+        - Category: FAVICON_SVG
+          ColorMode: DYNAMIC
+          Extension: SVG
+          Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KICA8ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM4QzdDRjAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMyRUM1RkYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyOCIgZmlsbD0idXJsKCNnKSIvPgogIDxwYXRoIGQ9Ik0xMTIgMzUyIEwyMDggMjU2IEwyNzIgMzEyIEw0MDAgMTY4IiBmaWxsPSJub25lIiBzdHJva2U9IiMwRjEwMjQiIHN0cm9rZS13aWR0aD0iNDQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0zMTIgMTYwIEg0MDggVjI1NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMEYxMDI0IiBzdHJva2Utd2lkdGg9IjQ0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==
+        - Category: PAGE_BACKGROUND
+          ColorMode: DARK
+          Extension: SVG
+          Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAwIDEwMDAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIHNsaWNlIj4KICA8ZGVmcz48ZmlsdGVyIGlkPSJiIiB4PSItNTAlIiB5PSItNTAlIiB3aWR0aD0iMjAwJSIgaGVpZ2h0PSIyMDAlIj48ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSI5MCIvPjwvZmlsdGVyPjwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSIxMDAwIiBmaWxsPSIjMEYxMDI0Ii8+CiAgPGcgZmlsdGVyPSJ1cmwoI2IpIiBvcGFjaXR5PSIuNTUiPgogICAgPGNpcmNsZSBjeD0iMjYwIiBjeT0iMjIwIiByPSIyNjAiIGZpbGw9IiM2QzVDRTciLz4KICAgIDxjaXJjbGUgY3g9IjEzODAiIGN5PSI3NjAiIHI9IjI4MCIgZmlsbD0iIzJFQzVGRiIvPgogICAgPGNpcmNsZSBjeD0iMTI1MCIgY3k9IjE0MCIgcj0iMTcwIiBmaWxsPSIjRkY2QjZCIiBvcGFjaXR5PSIuNyIvPgogICAgPGNpcmNsZSBjeD0iNDIwIiBjeT0iOTAwIiByPSIxOTAiIGZpbGw9IiNGRkI1NDciIG9wYWNpdHk9Ii41NSIvPgogIDwvZz4KPC9zdmc+Cg==
+        - Category: PAGE_BACKGROUND
+          ColorMode: LIGHT
+          Extension: SVG
+          Bytes: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAwIDEwMDAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIHNsaWNlIj4KICA8ZGVmcz48ZmlsdGVyIGlkPSJiIiB4PSItNTAlIiB5PSItNTAlIiB3aWR0aD0iMjAwJSIgaGVpZ2h0PSIyMDAlIj48ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSI5MCIvPjwvZmlsdGVyPjwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSIxMDAwIiBmaWxsPSIjRjdGN0ZCIi8+CiAgPGcgZmlsdGVyPSJ1cmwoI2IpIiBvcGFjaXR5PSIuMzUiPgogICAgPGNpcmNsZSBjeD0iMjYwIiBjeT0iMjIwIiByPSIyNjAiIGZpbGw9IiM2QzVDRTciLz4KICAgIDxjaXJjbGUgY3g9IjEzODAiIGN5PSI3NjAiIHI9IjI4MCIgZmlsbD0iIzJFQzVGRiIvPgogICAgPGNpcmNsZSBjeD0iMTI1MCIgY3k9IjE0MCIgcj0iMTcwIiBmaWxsPSIjRkY2QjZCIiBvcGFjaXR5PSIuNyIvPgogICAgPGNpcmNsZSBjeD0iNDIwIiBjeT0iOTAwIiByPSIxOTAiIGZpbGw9IiNGRkI1NDciIG9wYWNpdHk9Ii41NSIvPgogIDwvZz4KPC9zdmc+Cg==
 
   # ---------------------------------------------------------------- API
   ApiFunctionRole:
@@ -100,6 +228,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
+                  - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                 Resource: !GetAtt WorkoutsTable.Arn
@@ -144,8 +273,10 @@ Resources:
       Name: !Sub "${AWS::StackName}-api"
       ProtocolType: HTTP
       CorsConfiguration:
-        AllowOrigins:
-          - !Sub "https://${Distribution.DomainName}"
+        AllowOrigins: !If
+          - HasDomain
+          - [!Sub "https://${Distribution.DomainName}", !Sub "https://${DomainName}"]
+          - [!Sub "https://${Distribution.DomainName}"]
         AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
         AllowHeaders: [authorization, content-type]
         MaxAge: 3600
@@ -205,6 +336,115 @@ Resources:
       AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub "integrations/${ApiIntegration}"
 
+  # crew routes (docs/SOCIAL_DESIGN.md)
+  RouteMeGet:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /me
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteMePut:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: PUT /me
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsList:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /goals
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsCreate:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /goals
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsUpdate:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: PUT /goals/{id}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteGoalsDelete:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: DELETE /goals/{id}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCrew:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /crew
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCrewSeries:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /crew/series
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCrewCheers:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /crew/cheers
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCompsList:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /competitions
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCompsCreate:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /competitions
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  RouteCompsJoin:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /competitions/{id}/join
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -222,7 +462,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ApiFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/workouts*"
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*"
 
   # ---------------------------------------------------------------- frontend
   SiteBucket:
@@ -285,6 +525,13 @@ Resources:
         DefaultRootObject: index.html
         HttpVersion: http2and3
         PriceClass: PriceClass_100
+        Aliases: !If [HasDomain, [!Ref DomainName], !Ref AWS::NoValue]
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
         Origins:
           - Id: site
             DomainName: !GetAtt SiteBucket.RegionalDomainName
@@ -300,9 +547,41 @@ Resources:
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # AWS managed: CachingOptimized
           ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # AWS managed: SecurityHeadersPolicy
 
+  # Only when the domain's DNS is in Route 53. For DNS elsewhere, point a
+  # CNAME for DomainName at the DnsTarget output instead.
+  DomainRecordA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # fixed AWS value meaning "a CloudFront distribution"
+
+  DomainRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
 Outputs:
   SiteUrl:
+    Value: !If
+      - HasDomain
+      - !Sub "https://${DomainName}"
+      - !Sub "https://${Distribution.DomainName}"
+  CloudFrontUrl:
     Value: !Sub "https://${Distribution.DomainName}"
+  DnsTarget:
+    Description: Point a CNAME (DNS only, not proxied) for the custom domain here.
+    Value: !GetAtt Distribution.DomainName
   ApiUrl:
     Value: !GetAtt HttpApi.ApiEndpoint
   UserPoolId:
@@ -317,5 +596,7 @@ Outputs:
     Value: !Ref Distribution
   FunctionName:
     Value: !Ref ApiFunction
+  PreSignUpFunctionName:
+    Value: !Ref PreSignUpFunction
   TableName:
     Value: !Ref WorkoutsTable
