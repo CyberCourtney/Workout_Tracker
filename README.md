@@ -1,8 +1,64 @@
 # Workout Tracker
 
-A personal, phone-first workout tracker hosted in your own AWS account. Log workouts as you go, plan future ones on a calendar, and see your progress per exercise on a line chart.
+I'm on a fat loss journey. Anyone who's done one knows the scales are a
+pretty miserable way to measure it: they bounce around day to day, and
+some weeks they barely move even when everything else is going right.
+What I actually wanted to see was the stuff that *was* changing. Am I
+lifting more than I was a month ago? Am I turning up as often as I
+think I am? Is the work adding up?
 
-## Architecture
+My workouts were scattered across notes on my phone, half-remembered
+numbers and the odd screenshot. There was no way to look back and see
+progress, and no easy way to plan the week ahead either. The apps I
+tried were either cluttered, wanted a subscription, or wanted all my
+data on someone else's servers.
+
+So I built my own. It's a small, phone-first web app that does exactly
+three things:
+
+- **Calendar:** see which days I trained (a filled dot) and which I've
+  planned (a hollow dot), plan future sessions, and open any past one.
+- **Workout:** a big Start Workout button for the gym. Type each
+  exercise, add sets with reps and weight, hit Finish. If my phone locks
+  or the page refreshes mid-session, the draft is still there.
+- **Progress:** a chart per exercise, showing estimated one-rep max,
+  total volume or top set weight over time. This is the bit that keeps
+  me going on the weeks the scales don't.
+
+**It's also another hands-on AWS project.** I'm building my cloud skills
+by making real things I actually use, and a workout tracker for one
+person is a nice problem to get right: it needs a proper login, it has
+to keep my data safe and private, and it should cost close to nothing
+to run, because it sits idle for most of the day. That's why it's fully
+serverless with on-demand billing, why login is Cognito rather than
+something homemade, and why every piece of infrastructure lives in one
+CloudFormation template.
+
+## Build your own
+
+I built this with Claude Code from a single detailed prompt, then
+extended it with a second one. Both are in
+**[docs/PROMPT.md](docs/PROMPT.md)**, with my personal details swapped
+out for placeholders, so you can paste them into Claude Code and build
+your own copy in your own AWS account.
+
+## Skills demonstrated
+
+**AWS:** CloudFormation · Cognito (Hosted UI, authorization code + PKCE) ·
+API Gateway HTTP API (JWT authorizer) · Lambda · DynamoDB · S3 ·
+CloudFront (Origin Access Control) · IAM (least privilege)
+
+**Practices:** infrastructure as code, least-privilege IAM scoped to one
+table, the user always taken from the verified JWT and never from the
+request, input validation with clear 4xx errors and no leaked stack
+traces, unit tests including a check that one user can't read another
+user's data, and a design that costs close to zero when idle.
+
+**Frontend:** vanilla HTML, CSS and JavaScript with no framework, no
+libraries and no CDN. The chart is hand-drawn inline SVG. Light and dark
+mode follow the phone's setting.
+
+## How it works
 
 ```
 Phone browser
