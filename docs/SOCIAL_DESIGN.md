@@ -17,7 +17,7 @@ Why `CREW/MEMBER#` instead of `USER#<sub>/PROFILE`: profile fields are crew-visi
 |---|---|---|
 | `GET /me`, `PUT /me` | `{displayName, colour, sharing}` → own profile (404 until first set-up) | Key built from JWT sub only. Colour must be unused (any colour once all 8 are taken). |
 | `GET/POST /goals`, `PUT/DELETE /goals/{id}` | goal fields → goal + `progress {value, target, pct}` | Own partition only, so the same rule as workouts applies |
-| `GET /crew` | → `{me, members[{memberId,displayName,colour,shape}], goals[{memberId,type,exercise,target,progressPct,deadline,status}], feed[]}` | `members` filtered to `sharing=true` (the caller is always included). Goals are read only for those members. Whitelisted response fields. |
+| `GET /crew` | → `{me, members[{memberId,displayName,colour,shape}], goals[{memberId,label,target,value,progressPct,deadline,status}], feed[], exerciseNames[]}` | `members` filtered to `sharing=true` (the caller is always included). Goals are read only for those members. Whitelisted response fields. |
 | `GET /crew/series?exercise=&metric=` | → `{series[{memberId,displayName,colour,shape,points[{date,value}]}]}` | Sharing members only. Their workouts are reduced in the Lambda to one number per date. Members with no data for the exercise are omitted. |
 | `POST /crew/cheers` | `{memberId, ref}` → 201 | Target must be sharing. Writes only a feed item. |
 | `GET /competitions`, `POST /competitions`, `POST /competitions/{id}/join` | comp fields → `{comps[{…, standings[{rank,memberId,displayName,colour,score}]}]}` | Join needs `sharing=true`. Standings are computed from aggregates and drop anyone not sharing, even in locked results. |
