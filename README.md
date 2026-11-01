@@ -1,24 +1,96 @@
 # Workout Tracker
 
-A personal, phone-first workout tracker hosted in your own AWS account. Log workouts as you go, plan future ones on a calendar, and see your progress per exercise on a line chart.
+I'm on a fat loss journey. Anyone who's done one knows the scales are a
+pretty miserable way to measure it: they bounce around day to day, and
+some weeks they barely move even when everything else is going right.
+What I actually wanted to see was the stuff that *was* changing. Am I
+lifting more than I was a month ago? Am I turning up as often as I
+think I am? Is the work adding up?
 
-## Architecture
+My workouts were scattered across notes on my phone, half-remembered
+numbers and the odd screenshot. There was no way to look back and see
+progress, and no easy way to plan the week ahead either. The apps I
+tried were either cluttered, wanted a subscription, or wanted all my
+data on someone else's servers.
+
+So I built my own. It's a small, phone-first web app that does four
+things:
+
+- **Calendar:** see which days I trained (a filled dot) and which I've
+  planned (a hollow dot), plan future sessions, and open any past one.
+- **Workout:** a big Start Workout button for the gym. Type each
+  exercise, add sets with reps and weight, hit Finish. If my phone locks
+  or the page refreshes mid-session, the draft is still there.
+- **Progress:** a chart per exercise, showing estimated one-rep max,
+  total volume or top set weight over time. This is the bit that keeps
+  me going on the weeks the scales don't.
+- **Crew:** a few friends train alongside me. We can see each other's
+  goals, cheer each other on, run friendly challenges that measure
+  progress against each person's own starting point, and compare our
+  lines on the chart. Friends only ever see progress numbers, never
+  anyone's actual workouts.
+
+Along the way it picked up a landing page, its own domain
+(workout.cybercourtney.uk), a login page that matches the app, personal
+record celebrations and a shareable image of each workout.
+
+**It's also another hands-on AWS project.** I'm building my cloud skills
+by making real things I actually use, and a workout tracker for one
+person is a nice problem to get right: it needs a proper login, it has
+to keep my data safe and private, and it should cost close to nothing
+to run, because it sits idle for most of the day. That's why it's fully
+serverless with on-demand billing, why login is Cognito rather than
+something homemade, and why every piece of infrastructure lives in one
+CloudFormation template.
+
+## Build your own
+
+I built this with Claude Code from a single detailed prompt, then
+extended it step by step with three more. All four are in
+**[docs/PROMPT.md](docs/PROMPT.md)**, with my personal details swapped
+out for placeholders, so you can paste them into Claude Code and build
+your own copy in your own AWS account.
+
+## Skills demonstrated
+
+**AWS:** CloudFormation · Cognito (managed login with custom branding,
+authorization code + PKCE, invite-only sign-up via a Pre sign-up Lambda
+trigger) · API Gateway HTTP API (JWT authorizer) · Lambda · DynamoDB
+(on-demand, TTL) · S3 · CloudFront (Origin Access Control) · ACM
+(custom domain, DNS validation) · IAM (least privilege)
+
+**Practices:** infrastructure as code, least-privilege IAM scoped to one
+table, the user always taken from the verified JWT and never from the
+request, input validation with clear 4xx errors and no leaked stack
+traces, unit tests including a check that one user can't read another
+user's data, and a design that costs close to zero when idle.
+
+**Frontend:** vanilla HTML, CSS and JavaScript with no framework, no
+libraries and no CDN. The charts are hand-drawn inline SVG (the crew
+chart tells people apart by marker shape and name, not just colour), the
+share image is drawn with the Canvas API, the illustration is original
+SVG, and every text colour is checked against WCAG AA. Dark by default,
+with a light mode in Settings.
+
+## How it works
 
 ```
 Phone browser
    │  HTTPS
-   ├──► CloudFront ──(Origin Access Control)──► private S3 bucket  (index.html, styles.css, app.js, config.js)
-   ├──► Cognito Hosted UI  (sign-in, authorization code + PKCE, self sign-up disabled)
+   ├──► CloudFront ──(Origin Access Control)──► private S3 bucket  (landing page + app: index.html, styles.css, app.js, crew.js, share.js, config.js)
+   ├──► Cognito managed login  (branded sign-in, authorization code + PKCE)
+   │      └── invite-only sign-up ──► Pre sign-up Lambda (checks the invite code)
    └──► API Gateway HTTP API ──(JWT authorizer: Cognito)──► Lambda (Python 3.12) ──► DynamoDB (on-demand)
 ```
 
 | Piece | What it does | Idle cost |
 |---|---|---|
 | S3 + CloudFront | Serves the static frontend. Bucket is private; only CloudFront can read it. HTTPS only. | ~$0 (pennies of storage) |
-| Cognito user pool (Lite tier) | Login via the Hosted UI. Only users you create can sign in. | $0 (free under 10,000 monthly users) |
+| Cognito user pool (Essentials tier) | Branded managed login. Sign-up only with the crew invite code (or admin-created). | $0 (free under 10,000 monthly users) |
+| Pre sign-up Lambda (`backend/presignup.py`) | Rejects sign-ups without the right invite code. | $0 when idle |
 | HTTP API + JWT authorizer | Routes below; rejects requests without a valid Cognito access token. CORS allows only the CloudFront domain. Throttled to 10 req/s. | $0 when idle, pay per request |
-| Lambda (`backend/handler.py`) | Validates input and reads/writes the table. User is always the JWT `sub`. IAM allows only Query/PutItem/DeleteItem on this one table. | $0 when idle |
-| DynamoDB | One on-demand table, point-in-time recovery on, retained if the stack is deleted. | ~$0 (pennies of storage + PITR) |
+| Lambda (`backend/handler.py`) | Validates input and reads/writes the table. User is always the JWT `sub`; crew routes return aggregates only. IAM allows only Query/GetItem/PutItem/DeleteItem on this one table. | $0 when idle |
+| DynamoDB | One on-demand table, point-in-time recovery on, TTL for old crew feed items, retained if the stack is deleted. | ~$0 (pennies of storage + PITR) |
 | CloudWatch Logs | Lambda logs, kept 14 days. | ~$0 |
 | ACM certificate (optional, us-east-1) | TLS for the custom domain. | $0 |
 
@@ -26,7 +98,7 @@ No VPC, NAT gateway, provisioned capacity or anything billed by the hour.
 
 ### Data model
 
-One item per workout:
+One item per workout (crew items are described in [docs/SOCIAL_DESIGN.md](docs/SOCIAL_DESIGN.md)):
 
 - `PK` = `USER#<cognito sub>`
 - `SK` = `WORKOUT#<YYYY-MM-DD>#<id>`
@@ -42,6 +114,8 @@ Weights are stored in kg. The kg/lb setting only changes what the app displays.
 | `POST /workouts` | Creates a workout; the server assigns the id |
 | `PUT /workouts/{id}` | Replaces a workout (can move its date, e.g. starting a planned workout today) |
 | `DELETE /workouts/{id}` | |
+
+Crew routes (`/me`, `/goals`, `/crew`, `/crew/series`, `/crew/cheers`, `/competitions`) and how each one keeps workouts private are in [docs/SOCIAL_DESIGN.md](docs/SOCIAL_DESIGN.md).
 
 Validation: dates must be real `YYYY-MM-DD` dates, status must be `planned` or `completed`, reps and weight must be non-negative numbers, at most 30 exercises with 20 sets each, bodies at most 100 KB. Errors return a 4xx with `{"error": "..."}`; unexpected errors return a generic 500 and are logged, never echoed.
 
@@ -63,12 +137,15 @@ docs/share-samples/        Sample share images
 
 ## Features
 
+- **Landing page**: signed-out visitors see a landing page instead of being sent straight to the login; Sign in and "Have an invite? Join" start from there.
+- **Login page**: Cognito's managed login, themed to match the app (`LoginBranding` in the template, artwork in `infra/branding/`).
 - **Calendar**: month grid; filled dot = completed, hollow dot = planned. Tap a day to see, add, edit, delete, start, share or repeat its workouts.
 - **Workout**: type exercises as you go, with autocomplete and a "Last time" line under each exercise showing what you did before. The draft survives a refresh.
 - **Progress**: line chart per exercise (estimated 1RM, volume or top set).
 - **Personal records**: when you finish, any set that beats your previous best estimated 1RM or top weight for that exercise gets a 🏆 toast. Worked out on the phone from your history; nothing extra is stored.
 - **Share**: any completed workout (and the "Workout saved" sheet after Finish) can be shared as a 1080×1350 PNG drawn in the browser with the Canvas API. It opens the iPhone share sheet, or saves the file where sharing isn't available. PR sets get a "PR" badge.
 - **Repeat**: copies a past workout's exercises into a new draft for today. Last time's numbers show as greyed placeholders, so nothing counts until you type it.
+- **Crew**: shared goals with progress rings, cheers, friendly challenges ("Biggest improvers") and a Me | Crew chart. See [Crew](#crew-friends-training-together) below.
 
 ## Run the tests
 
